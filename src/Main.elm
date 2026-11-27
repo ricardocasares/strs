@@ -1400,8 +1400,8 @@ view model =
             [ Sidebar.new
                 |> Sidebar.state model.sidebar SidebarChanged
                 |> Sidebar.header [ viewLogo model ]
-                |> Sidebar.content (viewOrder model :: viewFilters model)
-                |> Sidebar.footer [ viewFooter model, viewAccount model ]
+                |> Sidebar.content (viewFilters model ++ [ viewOrder model ])
+                |> Sidebar.footer [ viewAccount model ]
                 |> Sidebar.rail
                 |> Sidebar.page [ class "min-w-0" ]
                     [ viewTopBar model
@@ -1568,7 +1568,18 @@ accountMenu model session =
     )
         ++ [ action [ onClick BrowseOpened ] Icon.userSearch "Browse user…"
            , action [ onClick (ProfileOpened ("https://github.com/" ++ current ++ "?tab=stars")) ] Icon.external "Open on GitHub"
-           , action [ onClick (SyncRequested Sync.Rebuild) ] Icon.refresh "Resync all"
+           ]
+        ++ (case ( session.account, session.library ) of
+                ( Missing, _ ) ->
+                    []
+
+                ( _, Open shelf ) ->
+                    [ DropdownMenu.separator, syncItem model session shelf ]
+
+                ( _, Opening ) ->
+                    []
+           )
+        ++ [ action [ onClick (SyncRequested Sync.Rebuild) ] Icon.refresh "Resync all"
                 |> (if isSyncing session then
                         DropdownMenu.disabled
 
@@ -1954,30 +1965,10 @@ shelfOf model =
 -- FOOTER
 
 
-viewFooter : Model -> Html Msg
-viewFooter model =
-    Sidebar.menu []
-        [ Sidebar.menuItem []
-            [ case model.page of
-                Stars session ->
-                    case ( session.account, session.library ) of
-                        ( Missing, _ ) ->
-                            span [ class "flex-1" ] []
-
-                        ( _, Open shelf ) ->
-                            syncButton model session shelf
-
-                        ( _, Opening ) ->
-                            Sidebar.menuSkeleton [ Sidebar.showIcon, class "flex-1 [--skeleton-width:60%]" ]
-
-                Invalid _ ->
-                    span [ class "flex-1" ] []
-            ]
-        ]
-
-
-syncButton : Model -> Session -> Shelf -> Html Msg
-syncButton model session shelf =
+{-| Where syncing stands, and the way to sync again or retry.
+-}
+syncItem : Model -> Session -> Shelf -> DropdownMenu.Item Msg
+syncItem model session shelf =
     let
         ( label, spinning, msg ) =
             case ( session.account, shelf.sync ) of
@@ -1989,19 +1980,19 @@ syncButton model session shelf =
                         _ ->
                             "Syncing…"
                     , True
-                    , Ignored
+                    , Nothing
                     )
 
                 ( _, Paused _ { until, reason } ) ->
                     case reason of
                         Limited ->
-                            ( "Paused until " ++ Format.clock model.zone until, False, RetryRequested )
+                            ( "Paused until " ++ Format.clock model.zone until, False, Just RetryRequested )
 
                         Backoff ->
-                            ( "Retrying…", True, RetryRequested )
+                            ( "Retrying…", True, Just RetryRequested )
 
                 ( _, Stalled _ _ ) ->
-                    ( "Sync failed", False, RetryRequested )
+                    ( "Sync failed", False, Just RetryRequested )
 
                 ( _, Idle ) ->
                     ( case Sync.syncedAt shelf.cursor of
@@ -2016,10 +2007,10 @@ syncButton model session shelf =
                         Nothing ->
                             "Not synced"
                     , False
-                    , SyncRequested Sync.Refresh
+                    , Just (SyncRequested Sync.Refresh)
                     )
     in
-    Sidebar.menuButton [ onClick msg, class "flex-1", attribute "aria-busy" (boolString spinning) ]
+    DropdownMenu.item (attribute "aria-busy" (boolString spinning) :: (Maybe.map onClick msg |> Maybe.map List.singleton |> Maybe.withDefault []))
         [ Icon.view
             (if spinning then
                 "animate-spin [animation-duration:1.5s]"
@@ -2030,6 +2021,13 @@ syncButton model session shelf =
             Icon.refresh
         , span [ class "tabular-nums" ] [ text label ]
         ]
+        |> (case msg of
+                Just _ ->
+                    identity
+
+                Nothing ->
+                    DropdownMenu.disabled
+           )
 
 
 {-| Light, dark or the system's: three icons in one rounded frame, the current one filled.
