@@ -1668,12 +1668,6 @@ viewFacet model tallies facet =
             (Sidebar.menuTrigger []
                 [ Icon.view "" (facetIcon facet)
                 , span [ class "flex-1 truncate" ] [ text (Filters.facetLabel facet) ]
-                , if Set.isEmpty wanted then
-                    text ""
-
-                  else
-                    span [ class "rounded-md bg-sidebar-accent px-1.5 text-[11px] leading-4 font-medium text-sidebar-accent-foreground tabular-nums" ]
-                        [ text (String.fromInt (Set.size wanted)) ]
                 , Icon.view "text-muted-foreground transition-transform duration-200 group-open/collapsible:rotate-90" Icon.caretRight
                 ]
             )
@@ -1688,6 +1682,22 @@ viewFacet model tallies facet =
                             [ "w-20", "w-28", "w-16" ]
                 )
             ]
+
+        -- Beside the trigger rather than in it: a button inside a <summary> would also
+        -- open and close the section.
+        , if Set.isEmpty wanted then
+            text ""
+
+          else
+            Html.button
+                [ type_ "button"
+                , onClick (Cleared facet)
+                , attribute "aria-label" ("Clear " ++ String.toLower (Filters.facetLabel facet))
+                , class "absolute end-8 top-1.5 flex h-5 items-center gap-0.5 rounded-md bg-sidebar-accent ps-1.5 pe-1 text-[11px] font-medium text-sidebar-accent-foreground tabular-nums ring-sidebar-ring outline-hidden hover:bg-sidebar-border focus-visible:ring-2"
+                ]
+                [ text (String.fromInt (Set.size wanted))
+                , Icon.view "size-3!" Icon.close
+                ]
         ]
 
 
@@ -1734,13 +1744,7 @@ facetEntries model facet wanted tallies =
                     [ Icon.view "" icon, span [] [ text label ] ]
                 ]
     in
-    (if Set.isEmpty wanted then
-        []
-
-     else
-        [ muted [ onClick (Cleared facet) ] Icon.close "Clear" ]
-    )
-        ++ List.map (facetItem facet wanted tallies.avatars) shown
+    List.map (facetItem facet wanted tallies.avatars) shown
         ++ (if hidden > 0 then
                 [ muted [ onClick (MoreToggled facet) ] Icon.caretDown (String.fromInt hidden ++ " more") ]
 
