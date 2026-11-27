@@ -1400,7 +1400,7 @@ view model =
             [ Sidebar.new
                 |> Sidebar.state model.sidebar SidebarChanged
                 |> Sidebar.header [ viewLogo model ]
-                |> Sidebar.content (viewFilters model ++ viewFacets model ++ [ viewOrder model ])
+                |> Sidebar.content (viewFacets model ++ viewFilters model ++ [ viewOrder model ])
                 |> Sidebar.footer [ viewAccount model ]
                 |> Sidebar.rail
                 |> Sidebar.page [ class "min-w-0" ]

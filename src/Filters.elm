@@ -88,12 +88,12 @@ facets =
         next list =
             case list of
                 [] ->
-                    next [ Language ]
-
-                Language :: _ ->
-                    next (Topic :: list)
+                    next [ Topic ]
 
                 Topic :: _ ->
+                    next (Language :: list)
+
+                Language :: _ ->
                     next (Owner :: list)
 
                 Owner :: _ ->
