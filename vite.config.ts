@@ -14,8 +14,8 @@ const spaFallback = (): Plugin => ({
   },
 });
 
-// Elm's debugger is on in development. It keeps every model, and merging its view of a search
-// index with thousands of entries can overflow the stack: ELM_DEBUG=0 turns it off.
+// Elm's debugger is on in development; ELM_DEBUG=0 turns it off. It walks lists and arrays in
+// the model one stack frame per element, so large collections in the model are Dicts.
 const debug = process.env.ELM_DEBUG !== "0";
 
 // MOCK_GITHUB=<fixtures dir> serves recorded stars instead of calling api.github.com.

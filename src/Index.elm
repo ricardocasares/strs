@@ -17,7 +17,6 @@ which is close enough while a sync streams pages in; `fromList` rebuilds exactly
 
 -}
 
-import Array exposing (Array)
 import Dict exposing (Dict)
 import Repo exposing (Repo)
 import Set
@@ -33,9 +32,19 @@ type Index
 
         -- The terms in order, for finding the ones a typed word starts with by bisection
         -- instead of walking them all. Rebuilt once per batch of changes.
-        , vocabulary : Array String
+        , vocabulary : Vocabulary
         , avatars : Dict String String
         }
+
+
+{-| The terms by their position in sorted order. A `Dict` rather than an `Array`: Elm's
+debugger walks arrays and lists in the model one stack frame per element, and fifteen
+thousand terms overflow the stack, where it takes a `Dict` whole.
+-}
+type alias Vocabulary =
+    { terms : Dict Int String
+    , size : Int
+    }
 
 
 type alias Entry =
@@ -101,7 +110,7 @@ empty =
         , postings = Dict.empty
         , totals = zeroes
         , count = 0
-        , vocabulary = Array.empty
+        , vocabulary = { terms = Dict.empty, size = 0 }
         , avatars = Dict.empty
         }
 
@@ -124,7 +133,7 @@ fromList repos =
             List.length repos
     in
     List.foldl (\( repo, fields ) index -> insert (averages totals count) repo fields index)
-        (Index { entries = Dict.empty, postings = Dict.empty, totals = totals, count = count, vocabulary = Array.empty, avatars = Dict.empty })
+        (Index { entries = Dict.empty, postings = Dict.empty, totals = totals, count = count, vocabulary = { terms = Dict.empty, size = 0 }, avatars = Dict.empty })
         tokenized
         |> withVocabulary
 
@@ -180,7 +189,11 @@ removeOne id (Index data) =
 
 withVocabulary : Index -> Index
 withVocabulary (Index data) =
-    Index { data | vocabulary = Array.fromList (Dict.keys data.postings) }
+    let
+        terms =
+            Dict.keys data.postings
+    in
+    Index { data | vocabulary = { terms = Dict.fromList (List.indexedMap Tuple.pair terms), size = List.length terms } }
 
 
 removePosting : Int -> String -> Dict String Posting -> Dict String Posting
@@ -410,7 +423,7 @@ boost phrase entries id relevance =
             relevance
 
 
-scoreWord : { a | postings : Dict String Posting, vocabulary : Array String, count : Int } -> String -> Dict Int Float
+scoreWord : { a | postings : Dict String Posting, vocabulary : Vocabulary, count : Int } -> String -> Dict Int Float
 scoreWord data word =
     expand word data
         |> List.foldl
@@ -450,14 +463,14 @@ scoreWord data word =
 
 {-| The word itself, and the longer words it starts, weighted down by how much is missing.
 -}
-expand : String -> { a | postings : Dict String Posting, vocabulary : Array String } -> List ( Float, Posting )
+expand : String -> { a | postings : Dict String Posting, vocabulary : Vocabulary } -> List ( Float, Posting )
 expand word { postings, vocabulary } =
     let
         length =
             toFloat (String.length word)
 
         collect index found acc =
-            case Array.get index vocabulary of
+            case Dict.get index vocabulary.terms of
                 Just term ->
                     if found < maxExpansions && String.startsWith word term then
                         let
@@ -487,7 +500,7 @@ expand word { postings, vocabulary } =
 {-| The position of the first term that sorts at or after the word: where the terms it
 starts begin.
 -}
-firstAtLeast : String -> Array String -> Int
+firstAtLeast : String -> Vocabulary -> Int
 firstAtLeast word vocabulary =
     let
         bisect low high =
@@ -499,7 +512,7 @@ firstAtLeast word vocabulary =
                     middle =
                         (low + high) // 2
                 in
-                case Array.get middle vocabulary of
+                case Dict.get middle vocabulary.terms of
                     Just term ->
                         if term < word then
                             bisect (middle + 1) high
@@ -510,7 +523,7 @@ firstAtLeast word vocabulary =
                     Nothing ->
                         low
     in
-    bisect 0 (Array.length vocabulary)
+    bisect 0 vocabulary.size
 
 
 intersect : Dict Int Float -> Dict Int Float -> Dict Int Float
