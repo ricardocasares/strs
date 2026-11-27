@@ -1866,6 +1866,8 @@ viewFilters model =
                     |> Slider.max (toFloat Filters.tierCount)
                     |> Slider.step 1
                     |> Slider.toHtml [ attribute "aria-label" "Stargazers" ]
+                , div [ class "mt-2 flex justify-between text-xs text-muted-foreground tabular-nums", attribute "aria-hidden" "true" ]
+                    [ span [] [ text "0" ], span [] [ text "100k+" ] ]
                 ]
             ]
     }
