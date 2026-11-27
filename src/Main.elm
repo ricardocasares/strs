@@ -2140,7 +2140,7 @@ viewSearch model =
                 Nothing ->
                     "Search stars"
     in
-    InputGroup.view [ class "h-9 flex-1 bg-background md:h-8" ]
+    InputGroup.view [ class "ms-auto h-9 flex-1 bg-background md:h-8 md:max-w-sm" ]
         [ InputGroup.input
             [ id "search"
             , type_ "text"
