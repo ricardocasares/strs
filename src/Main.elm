@@ -2043,7 +2043,7 @@ themeSwitch model =
 
 viewTopBar : Model -> Html Msg
 viewTopBar model =
-    Html.header [ class "sticky top-0 z-20 bg-background/85 backdrop-blur-md supports-[backdrop-filter]:bg-background/70" ]
+    Html.header [ class "sticky top-0 z-20 border-b bg-background/85 backdrop-blur-md supports-[backdrop-filter]:bg-background/70" ]
         [ div [ class "mx-auto flex h-14 w-full max-w-3xl items-center gap-2 px-2 md:px-4" ]
             [ Sidebar.trigger [ class "size-9 md:size-8" ] model.sidebar SidebarChanged
             , viewSearch model
