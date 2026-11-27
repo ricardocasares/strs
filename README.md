@@ -28,7 +28,7 @@ bun run dev
 ```
 
 `bun run dev:mock` serves recorded stars instead of calling GitHub, so development
-doesn't spend the rate limit. Record stars with `dev/record.sh <login>`, which needs the
+doesn't spend the rate limit. Record stars with `bun run record <login>`, which needs the
 `gh` CLI.
 
 `bun run build` writes the site to `dist/`. Pushing to `main` deploys it to GitHub Pages.

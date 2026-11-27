@@ -10,9 +10,9 @@
 //   /__github/__control?latency=400         slow every response down
 //   /__github/__control?offline=1           drop every request
 //
-// Fixtures: <dir>/<login>/user.json and page-<n>.json, recorded with
-//   gh api -H "Accept: application/vnd.github.star+json" "users/<login>/starred?per_page=100&page=<n>"
-// Any other login is served from the first fixture; "nobody" is a 404.
+// Fixtures are <dir>/<login>/user.json and page-<n>.json, recorded with
+// `bun run record <login>`. Any other login is served from the first fixture; "nobody" is
+// a 404.
 
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
@@ -29,6 +29,16 @@ type State = {
   offline: boolean;
 };
 
+// The settings /__control takes as numbers.
+const numeric = ["limit", "window", "retryAfter", "hide", "latency"] satisfies (keyof State)[];
+
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  typeof value === "object" && value !== null && !Array.isArray(value);
+
+const readJson = (path: string): unknown => JSON.parse(readFileSync(path, "utf8"));
+
+const pageNumber = (file: string) => Number(/^page-(\d+)\.json$/.exec(file)?.[1]);
+
 export const mockGitHub = (dir: string): Plugin => {
   const state: State = {
     // Plenty by default, like an authenticated client: lower it to test rate limits.
@@ -41,25 +51,43 @@ export const mockGitHub = (dir: string): Plugin => {
     latency: 150,
     offline: false,
   };
+
+  const fixtureLogin = () => {
+    const login = readdirSync(dir).find((name) => existsSync(join(dir, name, "user.json")));
+    if (login === undefined) throw new Error(`No fixtures in ${dir}: record some with bun run record <login>`);
+    return login;
+  };
+
+  const user = (login: string): Record<string, unknown> => {
+    const value = readJson(join(dir, login, "user.json"));
+    if (!isRecord(value)) throw new Error(`${login}/user.json isn't a user`);
+    return value;
+  };
+
+  // Every page of a fixture, oldest page first, read once.
   const cache = new Map<string, unknown[]>();
-  const fixtureLogin = () => readdirSync(dir).find((name) => existsSync(join(dir, name, "user.json")))!;
+  const load = (login: string): unknown[] =>
+    readdirSync(join(dir, login))
+      .filter((file) => Number.isInteger(pageNumber(file)))
+      .sort((a, b) => pageNumber(a) - pageNumber(b))
+      .flatMap((file): unknown[] => {
+        const page = readJson(join(dir, login, file));
+        if (!Array.isArray(page)) throw new Error(`${login}/${file} isn't a page of stars`);
+        return page;
+      });
 
   const stars = (login: string) => {
     const source = existsSync(join(dir, login, "user.json")) ? login : fixtureLogin();
-    if (!cache.has(source)) {
-      const pages = readdirSync(join(dir, source))
-        .filter((name) => name.startsWith("page-"))
-        .sort((a, b) => parseInt(a.slice(5)) - parseInt(b.slice(5)));
-      cache.set(source, pages.flatMap((page) => JSON.parse(readFileSync(join(dir, source, page), "utf8"))));
-    }
-    return { source, all: cache.get(source)!.slice(state.hide) };
+    const all = cache.get(source) ?? load(source);
+    cache.set(source, all);
+    return { source, all: all.slice(state.hide) };
   };
 
   return {
     name: "mock-github",
     apply: "serve",
     transform(code, id) {
-      if (id.endsWith(".elm") || id.includes(".elm?")) return code.replaceAll("https://api.github.com", "/__github");
+      return id.endsWith(".elm") || id.includes(".elm?") ? code.replaceAll("https://api.github.com", "/__github") : null;
     },
     configureServer(server) {
       server.middlewares.use("/__github", (req, res) => {
@@ -80,7 +108,6 @@ export const mockGitHub = (dir: string): Plugin => {
         if (req.method === "OPTIONS") return send(204, null);
 
         if (url.pathname === "/__control") {
-          const numeric: ("limit" | "window" | "retryAfter" | "hide" | "latency")[] = ["limit", "window", "retryAfter", "hide", "latency"];
           for (const key of numeric) {
             const value = url.searchParams.get(key);
             if (value !== null) state[key] = Number(value);
@@ -93,38 +120,41 @@ export const mockGitHub = (dir: string): Plugin => {
           return send(200, state);
         }
 
-        if (state.offline) return req.socket.destroy();
+        if (state.offline) {
+          req.socket.destroy();
+          return;
+        }
 
         const now = Math.floor(Date.now() / 1000);
         if (now >= state.resetAt) {
           state.used = 0;
           state.resetAt = now + state.window;
         }
-        const rate = () => ({
+        const rate = {
           "x-ratelimit-limit": String(state.limit),
           "x-ratelimit-remaining": String(Math.max(0, state.limit - state.used)),
           "x-ratelimit-reset": String(state.resetAt),
-        });
+        };
 
         if (state.retryAfter > 0) {
           const seconds = state.retryAfter;
           state.retryAfter = 0;
-          return send(429, { message: "secondary rate limit" }, { ...rate(), "retry-after": String(seconds) });
+          return send(429, { message: "secondary rate limit" }, { ...rate, "retry-after": String(seconds) });
         }
-        if (state.used >= state.limit) return send(403, { message: "API rate limit exceeded" }, rate());
+        if (state.used >= state.limit) return send(403, { message: "API rate limit exceeded" }, rate);
         state.used++;
 
-        const match = url.pathname.match(/^\/users\/([^/]+)(\/starred)?$/);
-        if (!match || match[1] === "nobody") return send(404, { message: "Not Found" }, rate());
-        const login = match[1];
+        const route = /^\/users\/([^/]+)(\/starred)?$/.exec(url.pathname);
+        const login = route?.[1];
+        if (login === undefined || login === "nobody") return send(404, { message: "Not Found" }, rate);
 
-        if (!match[2]) {
+        if (route?.[2] === undefined) {
           const { source } = stars(login);
-          const user = JSON.parse(readFileSync(join(dir, source, "user.json"), "utf8"));
-          const body = { ...user, login: source === login ? user.login : login };
+          const profile = user(source);
+          const body = { ...profile, login: source === login ? profile["login"] : login };
           const etag = `W/"user-${login}"`;
-          if (req.headers["if-none-match"] === etag) return send(304, null, { ...rate(), etag });
-          return send(200, body, { ...rate(), etag });
+          if (req.headers["if-none-match"] === etag) return send(304, null, { ...rate, etag });
+          return send(200, body, { ...rate, etag });
         }
 
         const { all } = stars(login);
@@ -135,14 +165,12 @@ export const mockGitHub = (dir: string): Plugin => {
         const etag = `W/"${login}-${page}-${all.length}-${state.hide}"`;
         const link = (n: number) =>
           `<http://${req.headers.host}/__github/users/${login}/starred?per_page=${perPage}&page=${n}>`;
-        const links = [
-          page < last ? `${link(page + 1)}; rel="next"` : null,
-          page < last ? `${link(last)}; rel="last"` : null,
-          page > 1 ? `${link(1)}; rel="first"` : null,
-        ].filter(Boolean);
+        const links: string[] = [];
+        if (page < last) links.push(`${link(page + 1)}; rel="next"`, `${link(last)}; rel="last"`);
+        if (page > 1) links.push(`${link(1)}; rel="first"`);
 
-        if (req.headers["if-none-match"] === etag) return send(304, null, { ...rate(), etag });
-        return send(200, body, { ...rate(), etag, ...(links.length ? { link: links.join(", ") } : {}) });
+        if (req.headers["if-none-match"] === etag) return send(304, null, { ...rate, etag });
+        return send(200, body, { ...rate, etag, ...(links.length > 0 ? { link: links.join(", ") } : {}) });
       });
     },
   };

@@ -8,8 +8,10 @@
     "build": "bun run types && bunx --bun vite build",
     "preview": "bunx --bun vite preview",
     "types": "bunx --bun elm-ts-interop --output src/Main.elm.d.ts",
-    "font:logo": "bun dev/subset-logo-font.mjs",
-    "favicon": "bun dev/favicon.mjs"
+    "check": "bun run types && tsc",
+    "font:logo": "bun dev/subset-logo-font.ts",
+    "favicon": "bun dev/favicon.ts",
+    "record": "bun dev/record.ts"
   },
   "devDependencies": {
     "@fontsource/major-mono-display": "^5.3.0",

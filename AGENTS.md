@@ -107,7 +107,7 @@ browser capability through a typed port.
 ## Developing without spending the rate limit
 
 Without a token, GitHub allows 60 requests an hour per IP. `bun run dev:mock` serves stars
-recorded in `dev/fixtures` instead. Record more with `dev/record.sh <login>`, which uses
+recorded in `dev/fixtures` instead. Record more with `bun run record <login>`, which uses
 the authenticated `gh` CLI. `dev/mock-github.ts` documents the settings at
 `/__github/__control`, which simulate rate limits, 429s, new stars and going offline.
 
@@ -120,7 +120,12 @@ is that font's R, which `bun run favicon` draws into `public/favicon.svg`.
 
 ## TypeScript
 
-- Never use type assertions (`as`), including `as const`. Narrow with type guards, or type
-  values through annotations.
+All scripts are TypeScript run by Bun, including the ones in `dev/`. `bun run check` must
+pass with the strict settings in `tsconfig.json`.
+
+- Never use type assertions: no `as`, including `as const`, and no non-null `!`. Narrow
+  with type guards, or type values through annotations.
+- `JSON.parse` and other `any` sources go into `unknown`, which you then narrow.
 - Every switch over a union ends with `default: x satisfies never`. A new variant from Elm
   then fails to type-check until it is handled.
+- Untyped dependencies get declarations in `dev/modules.d.ts` for just what we use.
