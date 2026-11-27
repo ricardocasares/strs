@@ -1636,64 +1636,56 @@ viewFilters model =
     let
         filters =
             model.filters
-    in
-    [ Sidebar.group []
-        [ Sidebar.groupLabel [ class "justify-between pe-1 text-sm! text-sidebar-foreground!" ]
-            [ span [ class "flex items-center gap-2" ] [ Icon.view "" Icon.funnel, text "Filters" ]
-            , if Filters.isInitial filters then
-                text ""
 
-              else
-                Html.button
-                    ([ type_ "button", onClick FiltersReset ]
-                        ++ Badge.toAttributes (Badge.new |> Badge.text "Clear all")
-                        ++ [ class "cursor-pointer pe-1.5 hover:bg-primary/85" ]
-                    )
-                    [ text "Clear all", Icon.view "" Icon.close ]
-            ]
-        , Sidebar.groupContent [ class "flex flex-col gap-4 px-1 pt-1" ]
-            [ filterField "Lifecycle"
-                []
-                (segmented "Lifecycle"
-                    LifecycleChosen
-                    filters.lifecycle
-                    [ ( Any, "All" ), ( Only Active, "Active" ), ( Only Archived, "Archived" ) ]
+        group label aside content =
+            Sidebar.group []
+                [ Sidebar.groupLabel [ class "justify-between pe-1" ] (text label :: aside)
+                , Sidebar.groupContent [ class "px-1" ] content
+                ]
+    in
+    [ group "Lifecycle"
+        []
+        [ segmented "Lifecycle"
+            LifecycleChosen
+            filters.lifecycle
+            [ ( Any, "All" ), ( Only Active, "Active" ), ( Only Archived, "Archived" ) ]
+        ]
+    , group "Origin"
+        []
+        [ segmented "Origin"
+            OriginChosen
+            filters.origin
+            [ ( Any, "All" ), ( Only Source, "Sources" ), ( Only Fork, "Forks" ) ]
+        ]
+    , group "Stars"
+        [ if Filters.isAnyStars filters.stars then
+            span [ class "font-normal text-sidebar-foreground tabular-nums" ] [ text (Filters.starsLabel filters.stars) ]
+
+          else
+            -- The range, as a badge that resets it.
+            Html.button
+                ([ type_ "button"
+                 , onClick (StarsChanged ( 0, toFloat Filters.tierCount ))
+                 , attribute "aria-label" ("Clear stars: " ++ Filters.starsLabel filters.stars)
+                 ]
+                    ++ Badge.toAttributes (Badge.new |> Badge.text "")
+                    ++ [ class "cursor-pointer pe-1.5 tabular-nums hover:bg-primary/85" ]
                 )
-            , filterField "Origin"
-                []
-                (segmented "Origin"
-                    OriginChosen
-                    filters.origin
-                    [ ( Any, "All" ), ( Only Source, "Sources" ), ( Only Fork, "Forks" ) ]
-                )
-            , filterField "Stars"
-                [ span [ class "tabular-nums text-sidebar-foreground" ] [ text (Filters.starsLabel filters.stars) ] ]
-                (div [ class "px-1 pt-1" ]
-                    [ Slider.new
-                        |> Slider.range (Tuple.first (Filters.starsToSlider filters.stars)) (Tuple.second (Filters.starsToSlider filters.stars))
-                        |> Slider.onChange StarsChanged
-                        |> Slider.min 0
-                        |> Slider.max (toFloat Filters.tierCount)
-                        |> Slider.step 1
-                        |> Slider.toHtml [ attribute "aria-label" "Stars" ]
-                    , div [ class "mt-2 flex justify-between text-[10px] text-muted-foreground tabular-nums" ]
-                        (List.map (\label -> span [] [ text label ]) [ "0", "10", "100", "1k", "10k", "100k", "∞" ])
-                    ]
-                )
+                [ text (Filters.starsLabel filters.stars), Icon.view "" Icon.close ]
+        ]
+        [ div [ class "px-1 pt-1" ]
+            [ Slider.new
+                |> Slider.range (Tuple.first (Filters.starsToSlider filters.stars)) (Tuple.second (Filters.starsToSlider filters.stars))
+                |> Slider.onChange StarsChanged
+                |> Slider.min 0
+                |> Slider.max (toFloat Filters.tierCount)
+                |> Slider.step 1
+                |> Slider.toHtml [ attribute "aria-label" "Stars" ]
+            , div [ class "mt-2 flex justify-between text-[10px] text-muted-foreground tabular-nums" ]
+                (List.map (\label -> span [] [ text label ]) [ "0", "10", "100", "1k", "10k", "100k", "∞" ])
             ]
         ]
     ]
-
-
-{-| A filter inside the section: a small label, anything that goes beside it, and the control.
--}
-filterField : String -> List (Html Msg) -> Html Msg -> Html Msg
-filterField label aside control =
-    div [ class "flex flex-col gap-1.5" ]
-        [ div [ class "flex items-center justify-between px-1 text-xs text-muted-foreground" ]
-            (text label :: aside)
-        , control
-        ]
 
 
 {-| Exactly one option is always pressed: picking another moves the press.
@@ -1705,9 +1697,10 @@ segmented label toMsg current options =
         |> ToggleGroup.pressed [ current ]
         |> ToggleGroup.outline
         |> ToggleGroup.small
+        |> ToggleGroup.spacing 0
         |> ToggleGroup.items (List.map (\( value, name ) -> ToggleGroup.item value [ text name ]) options)
         |> ToggleGroup.toHtml
-            [ class "w-full *:flex-1"
+            [ class "w-full *:h-6 *:flex-1 *:text-xs"
 
             -- The pressed option is filled like the badges, which reads in both themes.
             , class "*:aria-pressed:border-primary *:aria-pressed:bg-primary *:aria-pressed:text-primary-foreground *:aria-pressed:hover:bg-primary/90 *:aria-pressed:hover:text-primary-foreground"
