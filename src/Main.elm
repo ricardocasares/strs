@@ -78,6 +78,7 @@ type alias Model =
     , browse : Browse
     , query : String
     , filters : Filters
+    , expanded : List Facet
     , order : Order
     , limit : Int
     , page : Page
@@ -240,6 +241,7 @@ init json url key =
             , browse = Closed
             , query = ""
             , filters = Filters.initial
+            , expanded = []
             , order = Relevance
             , limit = pageSize
             , page = Invalid ""
@@ -493,6 +495,7 @@ type Msg
     | StarsChanged ( Float, Float )
     | Picked Facet String
     | Cleared Facet
+    | MoreToggled Facet
     | FiltersReset
     | OrderChosen Order
     | MoreRequested
@@ -571,6 +574,18 @@ update msg model =
 
         Cleared facet ->
             setFilters (Filters.clear facet) model
+
+        MoreToggled facet ->
+            ( { model
+                | expanded =
+                    if List.member facet model.expanded then
+                        List.filter ((/=) facet) model.expanded
+
+                    else
+                        facet :: model.expanded
+              }
+            , Cmd.none
+            )
 
 
         FiltersReset ->
@@ -1636,7 +1651,7 @@ viewFacets model =
     in
     case tallies of
         Just counted ->
-            List.map (viewFacet model counted) Filters.facets
+            [ Sidebar.group [] [ Sidebar.menu [] (List.map (viewFacet model counted) Filters.facets) ] ]
 
         Nothing ->
             []
@@ -1647,44 +1662,37 @@ viewFacet model tallies facet =
     let
         wanted =
             Filters.picked facet model.filters
-
-        label =
-            Filters.facetLabel facet
     in
-    Sidebar.group [ class "py-0" ]
+    Sidebar.menuItem []
         [ Sidebar.collapsible []
-            (Sidebar.groupTrigger [ class "gap-1.5 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground" ]
-                [ Icon.view "size-3.5! transition-transform duration-200 group-open/collapsible:rotate-90" Icon.caretRight
-                , text label
+            (Sidebar.menuTrigger []
+                [ Icon.view "" (facetIcon facet)
+                , span [ class "flex-1 truncate" ] [ text (Filters.facetLabel facet) ]
                 , if Set.isEmpty wanted then
                     text ""
 
                   else
-                    span [ class "rounded-md bg-sidebar-accent px-1.5 text-[11px] leading-4 text-sidebar-accent-foreground tabular-nums" ]
+                    span [ class "rounded-md bg-sidebar-accent px-1.5 text-[11px] leading-4 font-medium text-sidebar-accent-foreground tabular-nums" ]
                         [ text (String.fromInt (Set.size wanted)) ]
+                , Icon.view "text-muted-foreground transition-transform duration-200 group-open/collapsible:rotate-90" Icon.caretRight
                 ]
             )
-            [ case tallies of
-                Just counted ->
-                    viewFacetList facet wanted counted
+            [ Sidebar.menuSub [ class "mt-1" ]
+                (case tallies of
+                    Just counted ->
+                        facetEntries model facet wanted counted
 
-                Nothing ->
-                    Sidebar.menu [ class "pt-1" ]
-                        (List.map
-                            (\width -> Sidebar.menuItem [] [ Sidebar.menuSkeleton [ Sidebar.showIcon, class width ] ])
-                            [ "[--skeleton-width:55%]", "[--skeleton-width:70%]", "[--skeleton-width:45%]", "[--skeleton-width:60%]" ]
-                        )
+                    Nothing ->
+                        List.map
+                            (\width -> Sidebar.menuSubItem [] [ div [ class "flex h-7 items-center px-2" ] [ Skeleton.view [ class ("h-3.5 " ++ width) ] ] ])
+                            [ "w-20", "w-28", "w-16" ]
+                )
             ]
-        , if Set.isEmpty wanted then
-            text ""
-
-          else
-            Sidebar.groupAction [ onClick (Cleared facet), attribute "aria-label" ("Clear " ++ String.toLower label), class "top-1.5!" ] [ Icon.view "" Icon.close ]
         ]
 
 
-viewFacetList : Facet -> Set.Set String -> Tallies -> Html Msg
-viewFacetList facet wanted tallies =
+facetEntries : Model -> Facet -> Set.Set String -> Tallies -> List (Html Msg)
+facetEntries model facet wanted tallies =
     let
         counted =
             tally facet tallies
@@ -1697,36 +1705,70 @@ viewFacetList facet wanted tallies =
                         |> List.filter (\value -> not (List.any (Tuple.first >> (==) value) counted))
                         |> List.map (\value -> ( value, 0 ))
                    )
+
+        expanded =
+            List.member facet model.expanded
+
+        shown =
+            listed
                 |> List.indexedMap Tuple.pair
-                |> List.filter (\( index, ( value, _ ) ) -> index < 108 || Set.member value wanted)
+                |> List.filter
+                    (\( index, ( value, _ ) ) ->
+                        index
+                            < (if expanded then
+                                100
+
+                               else
+                                8
+                              )
+                            || Set.member value wanted
+                    )
                 |> List.map Tuple.second
 
-        ( top, rest ) =
-            ( List.take 8 listed, List.drop 8 listed )
+        hidden =
+            min 100 (List.length listed) - List.length shown
 
-        item =
-            facetItem facet wanted tallies.avatars
+        muted attrs icon label =
+            Sidebar.menuSubItem []
+                [ Sidebar.menuSubButton (class "text-muted-foreground [&>svg]:text-muted-foreground!" :: attrs)
+                    [ Icon.view "" icon, span [] [ text label ] ]
+                ]
     in
-    if List.isEmpty listed then
-        div [ class "px-2 py-1.5 text-xs text-muted-foreground" ] [ text "None" ]
+    (if Set.isEmpty wanted then
+        []
 
-    else
-        Sidebar.menu [ class "pt-1" ]
-            (List.map item top
-                ++ (if List.isEmpty rest then
-                        []
+     else
+        [ muted [ onClick (Cleared facet) ] Icon.close "Clear" ]
+    )
+        ++ List.map (facetItem facet wanted tallies.avatars) shown
+        ++ (if hidden > 0 then
+                [ muted [ onClick (MoreToggled facet) ] Icon.caretDown (String.fromInt hidden ++ " more") ]
 
-                    else
-                        [ Sidebar.menuItem []
-                            [ Sidebar.collapsible []
-                                (Sidebar.menuTrigger [ class "text-muted-foreground" ]
-                                    [ span [] [ text (String.fromInt (List.length rest) ++ " more") ] ]
-                                )
-                                [ Sidebar.menu [ class "mt-1" ] (List.map item rest) ]
-                            ]
-                        ]
-                   )
-            )
+            else if expanded && List.length listed > 8 then
+                [ muted [ onClick (MoreToggled facet) ] Icon.caretUp "Show less" ]
+
+            else
+                []
+           )
+        ++ (if List.isEmpty listed then
+                [ Sidebar.menuSubItem [] [ div [ class "flex h-7 items-center px-2 text-sm text-muted-foreground" ] [ text "None" ] ] ]
+
+            else
+                []
+           )
+
+
+facetIcon : Facet -> Icon.Icon
+facetIcon facet =
+    case facet of
+        Filters.Language ->
+            Icon.code
+
+        Filters.Topic ->
+            Icon.hash
+
+        Filters.Owner ->
+            Icon.users
 
 
 facetItem : Facet -> Set.Set String -> Dict String String -> ( String, Int ) -> Html Msg
@@ -1735,9 +1777,9 @@ facetItem facet wanted avatars ( value, count ) =
         isPicked =
             Set.member value wanted
     in
-    Sidebar.menuItem []
-        [ Sidebar.menuButton
-            ([ onClick (Picked facet value), attribute "aria-pressed" (boolString isPicked) ]
+    Sidebar.menuSubItem []
+        [ Sidebar.menuSubButton
+            ([ onClick (Picked facet value), attribute "aria-pressed" (boolString isPicked), class "w-full" ]
                 ++ (if isPicked then
                         [ Sidebar.active ]
 
@@ -1750,7 +1792,7 @@ facetItem facet wanted avatars ( value, count ) =
                     span [ class "flex size-4 shrink-0 items-center justify-center" ] [ languageDot value "size-2.5" ]
 
                 Filters.Topic ->
-                    Icon.view "text-muted-foreground" Icon.hash
+                    span [ class "flex size-4 shrink-0 items-center justify-center text-xs text-muted-foreground" ] [ text "#" ]
 
                 Filters.Owner ->
                     case Dict.get value avatars of
@@ -1759,9 +1801,9 @@ facetItem facet wanted avatars ( value, count ) =
 
                         Nothing ->
                             span [ class "size-4 shrink-0 rounded-full bg-muted" ] []
-            , span [] [ text value ]
+            , span [ class "flex-1 truncate text-start" ] [ text value ]
+            , span [ class "text-xs text-muted-foreground tabular-nums" ] [ text (Format.compact count) ]
             ]
-        , Sidebar.menuBadge [ class "text-muted-foreground" ] [ text (Format.compact count) ]
         ]
 
 
