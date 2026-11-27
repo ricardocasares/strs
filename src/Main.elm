@@ -1647,7 +1647,13 @@ segmented label toMsg current options =
         |> ToggleGroup.outline
         |> ToggleGroup.small
         |> ToggleGroup.items (List.map (\( value, name ) -> ToggleGroup.item value [ text name ]) options)
-        |> ToggleGroup.toHtml [ class "w-full *:flex-1", attribute "aria-label" label ]
+        |> ToggleGroup.toHtml
+            [ class "w-full *:flex-1"
+
+            -- The pressed option is filled like the badges, which reads in both themes.
+            , class "*:aria-pressed:border-primary *:aria-pressed:bg-primary *:aria-pressed:text-primary-foreground *:aria-pressed:hover:bg-primary/90 *:aria-pressed:hover:text-primary-foreground"
+            , attribute "aria-label" label
+            ]
 
 
 {-| Languages, topics and users, each a section that starts collapsed. A section's header
