@@ -1628,11 +1628,11 @@ accountMenu model session =
                     , DropdownMenu.group
                         [ case (syncState model open).action of
                             Just msg ->
-                                item [ onClick msg ] Icon.clock "Now"
+                                item [ onClick msg ] Icon.clock "Sync again"
                                     |> whenIdle
 
                             Nothing ->
-                                item [] Icon.clock "Now"
+                                item [] Icon.clock "Sync again"
                                     |> DropdownMenu.disabled
                         , item [ onClick (SyncRequested Sync.Rebuild) ] Icon.fullResync "Full sync"
                             |> whenIdle
@@ -1695,7 +1695,7 @@ syncTone shelf =
             Broken
 
 
-{-| Where syncing stands, and what "Now" does: sync when idle, retry when held up, nothing
+{-| Where syncing stands, and what "Sync again" does: sync when idle, retry when held up, nothing
 while it runs.
 -}
 syncState : Model -> Shelf -> { label : String, tone : Tone, action : Maybe Msg }
