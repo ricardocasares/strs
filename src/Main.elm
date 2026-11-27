@@ -2269,10 +2269,10 @@ viewOrder model =
                             , Icon.view "ms-auto"
                                 (case direction of
                                     Descending ->
-                                        Icon.arrowDown
+                                        Icon.descending
 
                                     Ascending ->
-                                        Icon.arrowUp
+                                        Icon.ascending
                                 )
                             ]
 
