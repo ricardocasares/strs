@@ -1,9 +1,8 @@
 module Icon exposing
     ( Icon, view
     , search, close, star, fork, archive, refresh, sun, moon
-    , monitor, chevronsUpDown, caretDown, caretUp, sort, userX, searchX
-    , clock, hash, code, users, arrowDown, arrowUp
-    , synced, pending, warning, fullResync
+    , monitor, chevronsUpDown, caretDown, caretUp, sort, userX, searchX, clock
+    , hash, code, users, arrowDown, arrowUp, fullResync
     )
 
 {-| The app's Phosphor icons, named for what they mean here.
@@ -129,21 +128,6 @@ arrowDown =
 arrowUp : Icon
 arrowUp =
     Phosphor.arrowUp
-
-
-synced : Icon
-synced =
-    Phosphor.checkCircle
-
-
-pending : Icon
-pending =
-    Phosphor.circleDashed
-
-
-warning : Icon
-warning =
-    Phosphor.warningCircle
 
 
 fullResync : Icon

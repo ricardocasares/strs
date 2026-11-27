@@ -1575,8 +1575,8 @@ tile classes login avatar =
         ]
 
 
-{-| Whose stars these are and where syncing them stands, then syncing, then the theme. Where
-syncing stands is a line of text, never a button.
+{-| Whose stars these are, then syncing them under a label that says where it stands, then
+the theme.
 -}
 accountMenu : Model -> Session -> List (DropdownMenu.Item Msg)
 accountMenu model session =
@@ -1603,25 +1603,6 @@ accountMenu model session =
                 ( _, Opening ) ->
                     Nothing
 
-        status =
-            case shelf of
-                Just open ->
-                    let
-                        state =
-                            syncState model open
-                    in
-                    span [ class "flex min-w-0 items-center gap-1.5 text-xs text-muted-foreground tabular-nums", attribute "role" "status" ]
-                        [ if state.tone == Busy then
-                            Spinner.view [ class "mx-px size-2.5! border-[1.5px]", attribute "aria-hidden" "true" ]
-
-                          else
-                            Icon.view "size-3.5!" state.icon
-                        , span [ class "truncate" ] [ text state.label ]
-                        ]
-
-                Nothing ->
-                    span [ class "truncate text-xs text-muted-foreground" ] [ text ("@" ++ login) ]
-
         -- Icons sit a step quieter than their labels, as in elmcn's menus.
         item attrs icon label =
             DropdownMenu.item attrs [ Icon.view "text-muted-foreground" icon, text label ]
@@ -1642,10 +1623,11 @@ accountMenu model session =
                                 identity
                     in
                     [ DropdownMenu.separator
-                    , DropdownMenu.label [ text "Sync" ]
+                    -- The section's label is where syncing stands.
+                    , DropdownMenu.label [ span [ class "tabular-nums", attribute "role" "status" ] [ text (syncState model open).label ] ]
                     , DropdownMenu.group
                         [ case (syncState model open).action of
-                            Just ( _, msg ) ->
+                            Just msg ->
                                 item [ onClick msg ] Icon.clock "Now"
                                     |> whenIdle
 
@@ -1668,7 +1650,7 @@ accountMenu model session =
             [ tile "size-8 rounded-lg" login avatar
             , span [ class "grid min-w-0 flex-1 gap-0.5 leading-tight" ]
                 [ span [ class "truncate text-sm font-medium" ] [ text name ]
-                , status
+                , span [ class "truncate text-xs text-muted-foreground" ] [ text ("@" ++ login) ]
                 ]
             ]
         ]
@@ -1713,10 +1695,10 @@ syncTone shelf =
             Broken
 
 
-{-| The status line, and the action that fits it: sync when idle, retry when held up, none
+{-| Where syncing stands, and what "Now" does: sync when idle, retry when held up, nothing
 while it runs.
 -}
-syncState : Model -> Shelf -> { icon : Icon.Icon, label : String, tone : Tone, action : Maybe ( String, Msg ) }
+syncState : Model -> Shelf -> { label : String, tone : Tone, action : Maybe Msg }
 syncState model shelf =
     let
         tone =
@@ -1724,8 +1706,7 @@ syncState model shelf =
     in
     case shelf.sync of
         Running run ->
-            { icon = Icon.refresh
-            , label =
+            { label =
                 case Sync.progress run.job of
                     Just fraction ->
                         "Syncing " ++ String.fromInt (round (fraction * 100)) ++ "%"
@@ -1739,14 +1720,13 @@ syncState model shelf =
         Paused _ { until, reason } ->
             case reason of
                 Limited ->
-                    { icon = Icon.clock, label = "Paused until " ++ Format.clock model.zone until, tone = tone, action = Just ( "Retry now", RetryRequested ) }
+                    { label = "Paused until " ++ Format.clock model.zone until, tone = tone, action = Just RetryRequested }
 
                 Backoff ->
-                    { icon = Icon.refresh, label = "Retrying…", tone = tone, action = Nothing }
+                    { label = "Retrying…", tone = tone, action = Nothing }
 
         Stalled _ problem ->
-            { icon = Icon.warning
-            , label =
+            { label =
                 case problem of
                     GitHub.Offline ->
                         "Offline"
@@ -1754,14 +1734,13 @@ syncState model shelf =
                     _ ->
                         "Sync failed"
             , tone = tone
-            , action = Just ( "Retry now", RetryRequested )
+            , action = Just RetryRequested
             }
 
         Idle ->
             case Sync.syncedAt shelf.cursor of
                 Just at ->
-                    { icon = Icon.synced
-                    , label =
+                    { label =
                         case Format.ago model.now at of
                             "now" ->
                                 "Synced just now"
@@ -1769,11 +1748,11 @@ syncState model shelf =
                             ago ->
                                 "Synced " ++ ago ++ " ago"
                     , tone = tone
-                    , action = Just ( "Sync now", SyncRequested Sync.Refresh )
+                    , action = Just (SyncRequested Sync.Refresh)
                     }
 
                 Nothing ->
-                    { icon = Icon.pending, label = "Not synced", tone = tone, action = Just ( "Sync now", SyncRequested Sync.Refresh ) }
+                    { label = "Not synced", tone = tone, action = Just (SyncRequested Sync.Refresh) }
 
 
 {-| A dot on the avatar in the sidebar, for a sync that needs a look without opening the menu.
