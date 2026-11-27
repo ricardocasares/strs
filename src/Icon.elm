@@ -2,7 +2,7 @@ module Icon exposing
     ( Icon, view
     , search, close, star, fork, archive, refresh, sun, moon
     , monitor, chevronsUpDown, caretDown, caretUp, sort, userX, searchX, clock
-    , hash, code, users, descending, ascending, fullResync
+    , hash, code, users, wideFirst, narrowFirst, fullResync
     )
 
 {-| The app's Phosphor icons, named for what they mean here.
@@ -120,18 +120,18 @@ users =
     Phosphor.users
 
 
-{-| Largest first: long bars on top, an arrow down. Phosphor names its glyphs the other way
-round, so these are picked by the picture, not the name.
+{-| Long bars on top, narrowing down. Phosphor names its sort glyphs the other way round, so
+these are named by their picture.
 -}
-descending : Icon
-descending =
+wideFirst : Icon
+wideFirst =
     Phosphor.sortAscending
 
 
-{-| Smallest first: short bars on top, an arrow up.
+{-| Short bars on top, widening down.
 -}
-ascending : Icon
-ascending =
+narrowFirst : Icon
+narrowFirst =
     Phosphor.sortDescending
 
 

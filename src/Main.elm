@@ -2263,17 +2263,10 @@ viewOrder model =
                 Sorted current direction ->
                     if current == key then
                         -- Picking the current order again turns it around.
-                        option [ onClick (SortChosen (Sorted key (Filters.flip direction))), attribute "aria-label" (Filters.keyLabel key ++ ", " ++ directionName direction) ]
+                        option [ onClick (SortChosen (Sorted key (Filters.flip direction))), attribute "aria-label" ("Sort " ++ String.toLower (Filters.keyLabel key) ++ " " ++ directionName direction) ]
                             True
                             [ span [] [ text (Filters.keyLabel key) ]
-                            , Icon.view "ms-auto"
-                                (case direction of
-                                    Descending ->
-                                        Icon.descending
-
-                                    Ascending ->
-                                        Icon.ascending
-                                )
+                            , Icon.view "ms-auto" (directionIcon key direction)
                             ]
 
                     else
@@ -2289,6 +2282,31 @@ viewOrder model =
                 :: List.map byKey Filters.keys
             )
         ]
+
+
+{-| The bars follow what each row shows. Stars show a count, so most first is wide on top.
+Dates show an age ("3h ago"), so newest first is narrow on top and widens as it gets older.
+-}
+directionIcon : Key -> Direction -> Icon.Icon
+directionIcon key direction =
+    case ( key, direction ) of
+        ( StarCount, Descending ) ->
+            Icon.wideFirst
+
+        ( StarCount, Ascending ) ->
+            Icon.narrowFirst
+
+        ( StarredAt, Descending ) ->
+            Icon.narrowFirst
+
+        ( StarredAt, Ascending ) ->
+            Icon.wideFirst
+
+        ( PushedAt, Descending ) ->
+            Icon.narrowFirst
+
+        ( PushedAt, Ascending ) ->
+            Icon.wideFirst
 
 
 directionName : Direction -> String
