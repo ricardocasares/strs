@@ -1388,8 +1388,7 @@ view model =
                     )
                 |> Sidebar.footer [ viewAccount model ]
                 |> Sidebar.rail
-                |> Sidebar.inset
-                |> Sidebar.page [ class "min-w-0 md:h-[calc(100svh-1rem)] md:overflow-y-auto" ]
+                |> Sidebar.page [ class "min-w-0" ]
                     [ viewTopBar model
                     , Html.section [ class "mx-auto w-full max-w-3xl px-2 pt-2 pb-16 md:px-4" ] [ viewMain model ]
                     ]
