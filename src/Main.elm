@@ -1717,13 +1717,15 @@ viewFacet model tallies facet =
 
           else
             Html.button
-                [ type_ "button"
-                , onClick (Cleared facet)
-                , attribute "aria-label" ("Clear " ++ String.toLower (Filters.facetLabel facet))
-                , class "absolute end-8 top-1.5 flex h-5 items-center gap-0.5 rounded-md bg-sidebar-accent ps-1.5 pe-1 text-[11px] font-medium text-sidebar-accent-foreground tabular-nums ring-sidebar-ring outline-hidden hover:bg-sidebar-border focus-visible:ring-2"
-                ]
+                ([ type_ "button"
+                 , onClick (Cleared facet)
+                 , attribute "aria-label" ("Clear " ++ String.toLower (Filters.facetLabel facet))
+                 ]
+                    ++ Badge.toAttributes (Badge.new |> Badge.text "")
+                    ++ [ class "absolute end-8 top-1.5 cursor-pointer pe-1.5 tabular-nums hover:bg-primary/85" ]
+                )
                 [ text (String.fromInt (Set.size wanted))
-                , Icon.view "size-3!" Icon.close
+                , Icon.view "" Icon.close
                 ]
         ]
 
