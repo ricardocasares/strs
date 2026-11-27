@@ -1612,7 +1612,7 @@ accountMenu model session =
                     in
                     span [ class "flex min-w-0 items-center gap-1.5 text-xs text-muted-foreground tabular-nums", attribute "role" "status" ]
                         [ if state.tone == Busy then
-                            Spinner.view [ class "size-3 border-[1.5px]", attribute "aria-hidden" "true" ]
+                            Spinner.view [ class "mx-px size-2.5! border-[1.5px]", attribute "aria-hidden" "true" ]
 
                           else
                             Icon.view "size-3.5!" state.icon
@@ -1622,8 +1622,9 @@ accountMenu model session =
                 Nothing ->
                     span [ class "truncate text-xs text-muted-foreground" ] [ text ("@" ++ login) ]
 
+        -- Icons sit a step quieter than their labels, as in elmcn's menus.
         item attrs icon label =
-            DropdownMenu.item attrs [ Icon.view "" icon, text label ]
+            DropdownMenu.item attrs [ Icon.view "text-muted-foreground" icon, text label ]
 
         sync =
             case shelf of
@@ -1660,7 +1661,7 @@ accountMenu model session =
                     []
 
         theme value icon label =
-            DropdownMenu.radioItem (model.theme == value) [ onClick (ThemeSelected value) ] [ Icon.view "" icon, text label ]
+            DropdownMenu.radioItem (model.theme == value) [ onClick (ThemeSelected value) ] [ Icon.view "text-muted-foreground" icon, text label ]
     in
     DropdownMenu.label
         [ div [ class "flex items-center gap-2 py-0.5 text-start font-normal text-popover-foreground" ]
@@ -1788,7 +1789,7 @@ syncDot tone =
             text ""
 
         Busy ->
-            Spinner.view [ class "absolute -end-0.5 -bottom-0.5 size-2.5 border-[1.5px] bg-sidebar text-sidebar-foreground ring-2 ring-sidebar", attribute "aria-hidden" "true" ]
+            Spinner.view [ class "absolute -end-px -bottom-px size-2! border-[1.5px] bg-sidebar text-sidebar-foreground ring-2 ring-sidebar", attribute "aria-hidden" "true" ]
 
         Waiting ->
             dot "bg-amber-500"
