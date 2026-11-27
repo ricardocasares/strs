@@ -1,5 +1,5 @@
 module Icon exposing
-    ( Icon, view, bold
+    ( Icon, view
     , search, close, star, fork, archive, refresh, sun, moon, monitor
     , chevronsUpDown, caretRight, caretDown, caretUp, sort, external, userSearch, userX, searchX, reset, clock
     , hash, code, users
@@ -21,15 +21,6 @@ type alias Icon =
 view : String -> Icon -> Html msg
 view classes icon =
     icon Phosphor.Regular
-        |> Phosphor.withClass ("size-4 shrink-0 " ++ classes)
-        |> Phosphor.toHtml []
-
-
-{-| The icon at the bold weight, for navigation where the strokes sit next to semibold text.
--}
-bold : String -> Icon -> Html msg
-bold classes icon =
-    icon Phosphor.Bold
         |> Phosphor.withClass ("size-4 shrink-0 " ++ classes)
         |> Phosphor.toHtml []
 

@@ -1584,7 +1584,7 @@ viewFilters model =
               else
                 Button.new
                     |> Button.text "Clear all"
-                    |> Button.startIcon (Icon.bold "" Icon.close)
+                    |> Button.startIcon (Icon.view "" Icon.close)
                     |> Button.ghost
                     |> Button.extraSmall
                     |> Button.toHtml [ onClick FiltersReset, class "-me-1 text-sidebar-foreground" ]
@@ -1661,7 +1661,11 @@ viewFacets model =
     in
     case tallies of
         Just counted ->
-            [ Sidebar.group [] [ Sidebar.menu [] (List.map (viewFacet model counted) Filters.facets) ] ]
+            [ Sidebar.group []
+                [ Sidebar.groupLabel [] [ text "Browse" ]
+                , Sidebar.menu [] (List.map (viewFacet model counted) Filters.facets)
+                ]
+            ]
 
         Nothing ->
             []
@@ -1676,12 +1680,12 @@ viewFacet model tallies facet =
     Sidebar.menuItem []
         [ Sidebar.collapsible []
             (Sidebar.menuTrigger []
-                [ Icon.bold "" (facetIcon facet)
+                [ Icon.view "" (facetIcon facet)
                 , span [ class "flex-1 truncate" ] [ text (Filters.facetLabel facet) ]
-                , Icon.bold "size-3.5! transition-transform duration-200 group-open/collapsible:rotate-90" Icon.caretRight
+                , Icon.view "ms-auto transition-transform duration-200 group-open/collapsible:rotate-90" Icon.caretRight
                 ]
             )
-            [ Sidebar.menuSub [ class "mt-1" ]
+            [ Sidebar.menuSub []
                 (case tallies of
                     Just counted ->
                         facetEntries model facet wanted counted
@@ -1751,7 +1755,7 @@ facetEntries model facet wanted tallies =
         muted attrs icon label =
             Sidebar.menuSubItem []
                 [ Sidebar.menuSubButton (class "text-sidebar-foreground/70 [&>svg]:text-current!" :: attrs)
-                    [ Icon.bold "" icon, span [] [ text label ] ]
+                    [ Icon.view "" icon, span [] [ text label ] ]
                 ]
     in
     List.map (facetItem facet wanted tallies.avatars) shown
@@ -1943,7 +1947,7 @@ syncButton model session shelf =
                     )
     in
     Sidebar.menuButton [ onClick msg, class "flex-1", attribute "aria-busy" (boolString spinning) ]
-        [ Icon.bold
+        [ Icon.view
             (if spinning then
                 "animate-spin [animation-duration:1.5s]"
 
@@ -1982,7 +1986,7 @@ themeMenu model =
                 |> Button.toAttributes
                 |> (++) [ attribute "aria-label" "Theme" ]
             )
-            [ Icon.bold "" (icon model.theme) ]
+            [ Icon.view "" (icon model.theme) ]
         |> DropdownMenu.content
             [ option Interop.Light "Light"
             , option Interop.Dark "Dark"
