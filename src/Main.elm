@@ -2115,7 +2115,7 @@ viewTopBar model =
             [ Sidebar.trigger [ class "-ms-1 size-9 md:size-8" ] model.sidebar SidebarChanged
             , Separator.new
                 |> Separator.vertical
-                |> Separator.toHtml [ class "me-2 self-center! data-[orientation=vertical]:h-4" ]
+                |> Separator.toHtml [ class "me-2" ]
             , viewSearch model
             ]
         , viewProgress model
