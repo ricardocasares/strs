@@ -1455,7 +1455,7 @@ viewIdentity session =
         Known profile ->
             layout
                 (userAvatar "bg-sidebar" profile.avatar login [ class "size-8" ])
-                (span [ class "truncate text-sm font-semibold" ] [ text (Profile.displayName profile) ])
+                (span [ class "truncate text-sm font-medium" ] [ text (Profile.displayName profile) ])
 
         Unknown ->
             if isWaiting session then
@@ -1832,11 +1832,11 @@ boolString b =
         "false"
 
 
-{-| Sidebar entries: semibold and muted, brightening on hover and when picked or open.
+{-| Sidebar entries: muted, brightening on hover and when picked or open.
 -}
 navClass : String
 navClass =
-    "font-semibold text-sidebar-foreground/65 hover:text-sidebar-foreground data-active:text-sidebar-foreground"
+    "text-sidebar-foreground/65 hover:text-sidebar-foreground data-active:text-sidebar-foreground"
 
 
 {-| A first sync that hasn't brought any stars in yet.
