@@ -21,6 +21,7 @@ import Json.Decode as Decode exposing (Decoder)
 import Json.Encode as Encode
 import Language
 import Login exposing (Login)
+import Logo
 import Process
 import Profile exposing (Profile)
 import Repo exposing (Lifecycle(..), Origin(..), Repo)
@@ -1425,14 +1426,12 @@ viewLogo : Model -> Html Msg
 viewLogo model =
     Sidebar.menu []
         [ Sidebar.menuItem []
-            [ Sidebar.menuLink [ Sidebar.large, href model.base, class "data-[size=lg]:h-12" ]
-                [ span [ class "flex size-8 shrink-0 items-center justify-center rounded-lg bg-sidebar-primary text-sidebar-primary-foreground" ]
-                    [ Icon.filled "size-4.5!" Icon.logo ]
-                , span [ class "grid flex-1 text-start leading-tight" ]
-                    [ span [ class "truncate text-sm font-semibold" ] [ text "strs" ]
-                    , span [ class "truncate text-xs text-muted-foreground" ] [ text "Starred repos, searchable" ]
-                    ]
+            [ Html.a
+                [ href model.base
+                , attribute "aria-label" "strs"
+                , class "flex h-12 items-center rounded-md px-2 text-sidebar-foreground ring-sidebar-ring outline-hidden focus-visible:ring-2"
                 ]
+                [ Logo.view "h-5 w-auto" ]
             ]
         ]
 
@@ -1534,14 +1533,6 @@ tile classes login avatar =
         ]
 
 
-{-| An icon in the same bordered square as the users above it.
--}
-boxed : Icon.Icon -> Html msg
-boxed icon =
-    span [ class "flex size-6 shrink-0 items-center justify-center rounded-md border bg-background" ]
-        [ Icon.view "size-3.5!" icon ]
-
-
 accountMenu : Model -> Session -> List (DropdownMenu.Item Msg)
 accountMenu model session =
     let
@@ -1552,7 +1543,7 @@ accountMenu model session =
             List.take 6 model.accounts
 
         action attrs icon label =
-            DropdownMenu.item attrs [ boxed icon, span [ class "text-muted-foreground" ] [ text label ] ]
+            DropdownMenu.item attrs [ Icon.view "" icon, text label ]
     in
     (if List.isEmpty others then
         []
@@ -1566,7 +1557,7 @@ accountMenu model session =
                         [ onClick (BrowseSubmitted (Maybe.withDefault session.login (Login.fromString summary.login)))
                         , attribute "aria-current" (boolString (summary.login == current))
                         ]
-                        [ tile "size-6 rounded-md border" summary.login (Maybe.map .avatar summary.profile)
+                        [ tile "size-5 rounded-full" summary.login (Maybe.map .avatar summary.profile)
                         , span [ class "truncate" ] [ text summary.login ]
                         , DropdownMenu.shortcut [ text (Format.compact summary.total) ]
                         ]

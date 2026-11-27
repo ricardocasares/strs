@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="40 52 690 186" fill="none" stroke="currentColor" stroke-width="8" stroke-linejoin="miter">
+  <title>strs</title>
+  <path id="s" d="M178 108C178 80 150 62 115 62 80 62 54 80 54 104 54 128 75 138 115 145 160 152 180 165 180 190 180 215 152 228 115 228 78 228 52 212 50 178"/>
+  <path d="M225 66H360M292 66V232"/>
+  <path d="M417 62V228H530L420 66M417 66H476A40 40 0 0 1 476 146"/>
+  <use href="#s" x="535"/>
+</svg>
