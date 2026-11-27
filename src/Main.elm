@@ -1847,14 +1847,14 @@ viewFilters model =
             [ ( Any, "All" ), ( Only Source, "Sources" ), ( Only Fork, "Forks" ) ]
         ]
     , stars =
-        group Icon.star "Stars"
+        group Icon.star "Stargazers"
         [ if Filters.isAnyStars filters.stars then
             text ""
 
           else
             -- The range, as a badge that resets it.
             clearBadge (Filters.starsLabel filters.stars)
-                ("Clear stars: " ++ Filters.starsLabel filters.stars)
+                ("Clear stargazers: " ++ Filters.starsLabel filters.stars)
                 (StarsChanged ( 0, toFloat Filters.tierCount ))
         ]
         [ div [ class "px-1 pt-1" ]
@@ -1864,7 +1864,7 @@ viewFilters model =
                 |> Slider.min 0
                 |> Slider.max (toFloat Filters.tierCount)
                 |> Slider.step 1
-                |> Slider.toHtml [ attribute "aria-label" "Stars" ]
+                |> Slider.toHtml [ attribute "aria-label" "Stargazers" ]
             , div [ class "mt-2 flex justify-between text-[10px] text-muted-foreground tabular-nums" ]
                 (List.map (\label -> span [] [ text label ]) [ "0", "10", "100", "1k", "10k", "100k", "∞" ])
             ]
