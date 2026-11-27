@@ -62,7 +62,6 @@ type alias Flags =
     , systemDark : Bool
     , blockedUntil : Maybe Int
     , api : String
-    , base : String
     , now : Int
     , sidebarOpen : Maybe Bool
     }
@@ -187,6 +186,5 @@ flags =
         |> TsDecode.andMap (TsDecode.field "systemDark" TsDecode.bool)
         |> TsDecode.andMap (TsDecode.field "blockedUntil" (TsDecode.nullable TsDecode.int))
         |> TsDecode.andMap (TsDecode.field "api" TsDecode.string)
-        |> TsDecode.andMap (TsDecode.field "base" TsDecode.string)
         |> TsDecode.andMap (TsDecode.field "now" TsDecode.int)
         |> TsDecode.andMap (TsDecode.field "sidebarOpen" (TsDecode.nullable TsDecode.bool))

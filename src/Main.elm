@@ -67,7 +67,6 @@ main =
 
 type alias Model =
     { key : Nav.Key
-    , base : String
     , api : GitHub.Api
     , theme : Theme
     , systemDark : Bool
@@ -210,14 +209,13 @@ init json url key =
     let
         flags =
             InteropPorts.decodeFlags json
-                |> Result.withDefault { theme = Nothing, systemDark = False, blockedUntil = Nothing, api = "https://api.github.com", base = "/", now = 0, sidebarOpen = Nothing }
+                |> Result.withDefault { theme = Nothing, systemDark = False, blockedUntil = Nothing, api = "https://api.github.com", now = 0, sidebarOpen = Nothing }
 
         now =
             Time.millisToPosix flags.now
 
         model =
             { key = key
-            , base = flags.base
             , api = GitHub.api flags.api
             , theme = Maybe.withDefault Interop.System flags.theme
             , systemDark = flags.systemDark
@@ -261,18 +259,23 @@ init json url key =
     )
 
 
-{-| `/strs/` is the default user, `/strs/<login>` anyone else.
+{-| The app lives at the document's base, `/strs/`: the base itself is the default user, and
+`<base><login>` anyone else. The base isn't known here, so the URL's shape says which: the base
+ends with a slash, a user's page doesn't.
 -}
 route : Url -> Model -> ( Model, Cmd Msg )
 route url model =
     let
         segment =
-            String.dropLeft (String.length model.base) (url.path ++ "/")
-                |> String.split "/"
-                |> List.head
-                |> Maybe.withDefault ""
-                |> Url.percentDecode
-                |> Maybe.withDefault ""
+            if String.endsWith "/" url.path then
+                ""
+
+            else
+                String.split "/" url.path
+                    |> List.reverse
+                    |> List.head
+                    |> Maybe.andThen Url.percentDecode
+                    |> Maybe.withDefault ""
 
         target =
             if String.isEmpty segment then
@@ -587,7 +590,7 @@ handle msg model =
             if version == model.linkVersion then
                 case model.page of
                     Stars session ->
-                        ( model, Nav.replaceUrl model.key (model.base ++ Login.toString session.login ++ Link.toQuery (shared model)) )
+                        ( model, Nav.replaceUrl model.key (Login.toString session.login ++ Link.toQuery (shared model)) )
 
                     Invalid _ ->
                         ( model, Cmd.none )
@@ -709,7 +712,7 @@ handle msg model =
             ( model, Cmd.none )
 
         UserChosen login ->
-            ( model, Nav.pushUrl model.key (model.base ++ Login.toString login) )
+            ( model, Nav.pushUrl model.key (Login.toString login) )
 
         ProfileOpened url ->
             ( model, InteropPorts.fromElm (Interop.OpenUrl url) )
@@ -1504,7 +1507,7 @@ viewLogo model =
     Sidebar.menu []
         [ Sidebar.menuItem []
             [ Html.a
-                [ href model.base
+                [ href "./"
                 , attribute "aria-label" "strs"
                 , class "flex h-12 items-center rounded-md px-2 text-sidebar-foreground ring-sidebar-ring outline-hidden focus-visible:ring-2"
                 ]
