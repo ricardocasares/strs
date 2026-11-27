@@ -1390,9 +1390,15 @@ viewIdentity session =
                 (span [ class "truncate text-sm font-medium" ] [ text (Profile.displayName profile) ])
 
         Unknown ->
-            layout
-                (Skeleton.view [ class "size-8 shrink-0 rounded-full!" ])
-                (span [ class "flex h-5 items-center" ] [ Skeleton.view [ class "h-3.5 w-24" ] ])
+            if isWaiting session then
+                layout
+                    (Avatar.new |> Avatar.fallback [ text (String.toUpper (String.left 1 login)) ] |> Avatar.toHtml [ class "size-8", attribute "aria-hidden" "true" ])
+                    (span [ class "truncate text-sm font-medium" ] [ text login ])
+
+            else
+                layout
+                    (Skeleton.view [ class "size-8 shrink-0 rounded-full!" ])
+                    (span [ class "flex h-5 items-center" ] [ Skeleton.view [ class "h-3.5 w-24" ] ])
 
         Missing ->
             layout
@@ -1451,6 +1457,26 @@ accountMenu model session =
                         identity
                    )
            ]
+
+
+{-| Syncing is held up for longer than a skeleton should pulse.
+-}
+isWaiting : Session -> Bool
+isWaiting session =
+    case session.library of
+        Open shelf ->
+            case shelf.sync of
+                Paused _ { reason } ->
+                    reason == Limited
+
+                Stalled _ _ ->
+                    True
+
+                _ ->
+                    False
+
+        Opening ->
+            False
 
 
 isSyncing : Session -> Bool
@@ -1534,7 +1560,35 @@ viewLanguages model =
     let
         selected =
             model.filters.languages
+
+        loading =
+            case model.page of
+                Stars session ->
+                    case ( session.account, session.library ) of
+                        ( Missing, _ ) ->
+                            False
+
+                        ( _, Opening ) ->
+                            True
+
+                        ( _, Open shelf ) ->
+                            isFilling shelf
+
+                Invalid _ ->
+                    False
+
+        empty =
+            Set.isEmpty selected && (shelfOf model |> Maybe.map (.results >> .languages >> List.isEmpty) |> Maybe.withDefault True)
     in
+    if empty && not loading then
+        text ""
+
+    else
+        viewLanguageGroup model selected
+
+
+viewLanguageGroup : Model -> Set.Set String -> Html Msg
+viewLanguageGroup model selected =
     Sidebar.group []
         [ Sidebar.groupLabel [] [ text "Languages" ]
         , if Set.isEmpty selected then
@@ -1636,7 +1690,18 @@ boolString b =
 -}
 isFilling : Shelf -> Bool
 isFilling shelf =
-    Index.size shelf.index == 0 && shelf.sync /= Idle
+    Index.size shelf.index
+        == 0
+        && (case shelf.sync of
+                Running _ ->
+                    True
+
+                Paused _ { reason } ->
+                    reason == Backoff
+
+                _ ->
+                    False
+           )
 
 
 shelfOf : Model -> Maybe Shelf
@@ -1967,6 +2032,14 @@ viewMain model =
                     viewShelf model session shelf
 
 
+retryButton : Html Msg
+retryButton =
+    Button.new
+        |> Button.text "Retry now"
+        |> Button.outline
+        |> Button.toHtml [ onClick RetryRequested ]
+
+
 browseButton : Html Msg
 browseButton =
     Button.new
@@ -1980,6 +2053,25 @@ viewShelf : Model -> Session -> Shelf -> Html Msg
 viewShelf model session shelf =
     if Index.size shelf.index == 0 then
         case shelf.sync of
+            Paused _ { until, reason } ->
+                if reason == Limited then
+                    Empty.new
+                        |> Empty.icon (Icon.view "" Icon.clock)
+                        |> Empty.title [ text ("GitHub's limit resets at " ++ Format.clock model.zone until) ]
+                        |> Empty.description [ text "Stars sync on their own after that." ]
+                        |> Empty.content [ retryButton ]
+                        |> Empty.toHtml [ class "mt-16" ]
+
+                else
+                    skeletonList 10
+
+            Stalled _ _ ->
+                Empty.new
+                    |> Empty.icon (Icon.view "" Icon.refresh)
+                    |> Empty.title [ text "Couldn't reach GitHub" ]
+                    |> Empty.content [ retryButton ]
+                    |> Empty.toHtml [ class "mt-16" ]
+
             Idle ->
                 Empty.new
                     |> Empty.icon (Icon.view "" Icon.star)
@@ -2112,6 +2204,7 @@ viewHit now order query color repo =
                 , target "_blank"
                 , rel "noopener"
                 , class "gap-x-2.5 gap-y-1.5 px-2.5 py-3 md:px-3"
+                , class "[&>[data-slot=item-content]]:min-w-0 [&_[data-slot=item-title]]:w-auto [&_[data-slot=item-title]]:max-w-full"
                 ]
         ]
 
