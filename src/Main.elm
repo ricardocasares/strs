@@ -1204,7 +1204,7 @@ step run next session shelf model =
                             else
                                 Nothing
             in
-            ( refresh (setSync session pruned Idle model), Cmd.batch [ cmd, pruneCmd ] )
+            ( refresh (setSync session pruned Idle model), Cmd.batch [ cmd, pruneCmd, InteropPorts.fromElm Interop.LoadAccounts ] )
                 |> andThen
                     (case report of
                         Just item ->
@@ -1430,7 +1430,8 @@ viewAccount model =
                     , Icon.view "ms-auto size-4 text-muted-foreground" Icon.chevronsUpDown
                     ]
                 |> DropdownMenu.content (accountMenu model session)
-                |> DropdownMenu.toHtml [ class "w-60 max-w-[calc(100vw-2rem)]" ]
+                |> DropdownMenu.right
+                |> DropdownMenu.toHtml [ class "w-56 max-w-[calc(100vw-2rem)] rounded-lg" ]
 
         Invalid _ ->
             Sidebar.menuButton [ Sidebar.large, onClick BrowseOpened ]
@@ -1475,35 +1476,51 @@ viewIdentity session =
     case session.account of
         Known profile ->
             layout
-                (userAvatar "bg-sidebar" profile.avatar login [ class "size-8" ])
+                (tile "size-8 rounded-lg" login (Just profile.avatar))
                 (span [ class "truncate text-sm font-medium" ] [ text (Profile.displayName profile) ])
 
         Unknown ->
             if isWaiting session then
                 layout
-                    (Avatar.new |> Avatar.fallback [ text (String.toUpper (String.left 1 login)) ] |> Avatar.toHtml [ class "size-8", attribute "aria-hidden" "true" ])
+                    (tile "size-8 rounded-lg" login Nothing)
                     (span [ class "truncate text-sm font-medium" ] [ text login ])
 
             else
                 layout
-                    (Skeleton.view [ class "size-8 shrink-0 rounded-full!" ])
+                    (Skeleton.view [ class "size-8 shrink-0 rounded-lg!" ])
                     (span [ class "flex h-5 items-center" ] [ Skeleton.view [ class "h-3.5 w-24" ] ])
 
         Missing ->
             layout
-                (span [ class "flex size-8 shrink-0 items-center justify-center rounded-full bg-muted text-muted-foreground" ] [ Icon.view "" Icon.userX ])
+                (span [ class "flex size-8 shrink-0 items-center justify-center rounded-lg bg-muted text-muted-foreground" ] [ Icon.view "" Icon.userX ])
                 (span [ class "truncate text-sm font-medium" ] [ text login ])
 
 
-{-| The image sits on the fallback, so it gets the colour of the surface around it: logos with
-transparent parts then look as they do on GitHub, instead of showing the initial through.
+{-| A user's avatar in a rounded square, over their initial. The image gets an opaque
+background, so logos with transparent parts don't show the initial through.
 -}
-userAvatar : String -> String -> String -> List (Html.Attribute Msg) -> Html Msg
-userAvatar surface url login attrs =
-    Avatar.new
-        |> Avatar.fallback [ text (String.toUpper (String.left 1 login)) ]
-        |> Avatar.img [ src (Profile.avatar 80 url), alt "", class surface ]
-        |> Avatar.toHtml (attribute "aria-hidden" "true" :: attrs)
+tile : String -> String -> Maybe String -> Html msg
+tile classes login avatar =
+    span
+        [ class ("relative flex shrink-0 items-center justify-center overflow-hidden bg-muted text-xs font-medium text-muted-foreground " ++ classes)
+        , attribute "aria-hidden" "true"
+        ]
+        [ text (String.toUpper (String.left 1 login))
+        , case avatar of
+            Just url ->
+                Html.img [ src (Profile.avatar 80 url), alt "", class "absolute inset-0 size-full bg-background object-cover" ] []
+
+            Nothing ->
+                text ""
+        ]
+
+
+{-| An icon in the same bordered square as the users above it.
+-}
+boxed : Icon.Icon -> Html msg
+boxed icon =
+    span [ class "flex size-6 shrink-0 items-center justify-center rounded-md border bg-background" ]
+        [ Icon.view "size-3.5!" icon ]
 
 
 accountMenu : Model -> Session -> List (DropdownMenu.Item Msg)
@@ -1514,24 +1531,25 @@ accountMenu model session =
 
         others =
             List.take 6 model.accounts
+
+        action attrs icon label =
+            DropdownMenu.item attrs [ boxed icon, span [ class "text-muted-foreground" ] [ text label ] ]
     in
     (if List.isEmpty others then
         []
 
      else
-        [ DropdownMenu.group
+        [ DropdownMenu.label [ text "Users" ]
+        , DropdownMenu.group
             (List.map
                 (\summary ->
-                    DropdownMenu.radioItem (summary.login == current)
-                        [ onClick (BrowseSubmitted (Maybe.withDefault session.login (Login.fromString summary.login))) ]
-                        [ case summary.profile of
-                            Just profile ->
-                                userAvatar "bg-popover" profile.avatar summary.login [ class "size-5" ]
-
-                            Nothing ->
-                                Avatar.new |> Avatar.fallback [ text (String.toUpper (String.left 1 summary.login)) ] |> Avatar.toHtml [ class "size-5 text-[10px]" ]
+                    DropdownMenu.item
+                        [ onClick (BrowseSubmitted (Maybe.withDefault session.login (Login.fromString summary.login)))
+                        , attribute "aria-current" (boolString (summary.login == current))
+                        ]
+                        [ tile "size-6 rounded-md border" summary.login (Maybe.map .avatar summary.profile)
                         , span [ class "truncate" ] [ text summary.login ]
-                        , span [ class "ms-auto text-xs text-muted-foreground tabular-nums" ] [ text (Format.compact summary.total) ]
+                        , DropdownMenu.shortcut [ text (Format.compact summary.total) ]
                         ]
                 )
                 others
@@ -1539,9 +1557,9 @@ accountMenu model session =
         , DropdownMenu.separator
         ]
     )
-        ++ [ DropdownMenu.item [ onClick BrowseOpened ] [ Icon.view "" Icon.userSearch, text "Browse user…" ]
-           , DropdownMenu.item [ onClick (ProfileOpened ("https://github.com/" ++ current ++ "?tab=stars")) ] [ Icon.view "" Icon.external, text "Open on GitHub" ]
-           , DropdownMenu.item [ onClick (SyncRequested Sync.Rebuild) ] [ Icon.view "" Icon.refresh, text "Resync all" ]
+        ++ [ action [ onClick BrowseOpened ] Icon.userSearch "Browse user…"
+           , action [ onClick (ProfileOpened ("https://github.com/" ++ current ++ "?tab=stars")) ] Icon.external "Open on GitHub"
+           , action [ onClick (SyncRequested Sync.Rebuild) ] Icon.refresh "Resync all"
                 |> (if isSyncing session then
                         DropdownMenu.disabled
 
