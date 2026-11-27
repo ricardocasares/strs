@@ -1578,7 +1578,7 @@ viewFilters model =
             model.filters
     in
     [ Sidebar.group []
-        [ Sidebar.groupLabel [ class "justify-between pe-0 text-sidebar-foreground!" ]
+        [ Sidebar.groupLabel [ class "justify-between pe-0 text-sm! text-sidebar-foreground!" ]
             [ text "Filters"
             , if Filters.isInitial filters then
                 text ""
@@ -1586,7 +1586,7 @@ viewFilters model =
               else
                 Button.new
                     |> Button.text "Clear all"
-                    |> Button.startIcon (Icon.view "" Icon.close)
+                    |> Button.endIcon (Icon.view "" Icon.close)
                     |> Button.ghost
                     |> Button.extraSmall
                     |> Button.toHtml [ onClick FiltersReset, class "-me-1 text-sidebar-foreground" ]
