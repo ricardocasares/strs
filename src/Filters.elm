@@ -211,12 +211,19 @@ inStars (Stars low high) count =
 
 
 {-| The slider's stops for a library with these fewest and most stars: its two ends, and the
-powers of ten in between, so the scale is logarithmic and never leaves the real counts.
+1–2–5 steps in between (1, 2, 5, 10, 20, 50…). The scale is logarithmic, so every step is about
+the same size wherever the thumb is, and it never leaves the real counts.
 -}
 stops : ( Int, Int ) -> List Int
 stops ( fewest, most ) =
+    let
+        steps =
+            List.range 0 9
+                |> List.concatMap (\power -> List.map (\digit -> digit * 10 ^ power) [ 1, 2, 5 ])
+                |> List.filter (\step -> fewest < step && step < most)
+    in
     fewest
-        :: List.filter (\step -> fewest < step && step < most) [ 10, 100, 1000, 10000, 100000, 1000000 ]
+        :: steps
         ++ (if most > fewest then
                 [ most ]
 
