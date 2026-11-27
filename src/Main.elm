@@ -1400,7 +1400,7 @@ view model =
             [ Sidebar.new
                 |> Sidebar.state model.sidebar SidebarChanged
                 |> Sidebar.header [ viewLogo model ]
-                |> Sidebar.content (viewFilters model ++ [ viewOrder model ])
+                |> Sidebar.content (viewFilters model ++ viewFacets model ++ [ viewOrder model ])
                 |> Sidebar.footer [ viewAccount model ]
                 |> Sidebar.rail
                 |> Sidebar.page [ class "min-w-0" ]
@@ -1685,7 +1685,6 @@ viewFilters model =
                     ]
                 )
             ]
-        , viewFacets model
         ]
     ]
 
@@ -1723,7 +1722,7 @@ segmented label toMsg current options =
 {-| Languages, topics and users, each a section that starts collapsed. A section's header
 counts its picks, so filters hidden inside a collapsed section are still in view.
 -}
-viewFacets : Model -> Html Msg
+viewFacets : Model -> List (Html Msg)
 viewFacets model =
     let
         tallies =
@@ -1748,55 +1747,50 @@ viewFacets model =
     in
     case tallies of
         Just counted ->
-            Sidebar.menu [ class "mt-5" ] (List.map (viewFacet model counted) Filters.facets)
+            List.map (viewFacet model counted) Filters.facets
 
         Nothing ->
-            text ""
+            []
 
 
+{-| A facet's values, under its label. While some are picked, a badge beside the label
+counts them and clears them.
+-}
 viewFacet : Model -> Maybe Tallies -> Facet -> Html Msg
 viewFacet model tallies facet =
     let
         wanted =
             Filters.picked facet model.filters
     in
-    Sidebar.menuItem []
-        [ Sidebar.collapsible []
-            (Sidebar.menuTrigger []
-                [ Icon.view "" (facetIcon facet)
-                , span [ class "flex-1 truncate" ] [ text (Filters.facetLabel facet) ]
-                , Icon.view "ms-auto transition-transform duration-200 group-open/collapsible:rotate-90" Icon.caretRight
-                ]
-            )
-            [ Sidebar.menuSub []
-                (case tallies of
-                    Just counted ->
-                        facetEntries model facet wanted counted
+    Sidebar.group []
+        [ Sidebar.groupLabel [ class "justify-between pe-1" ]
+            [ text (Filters.facetLabel facet)
+            , if Set.isEmpty wanted then
+                text ""
 
-                    Nothing ->
-                        List.map
-                            (\width -> Sidebar.menuSubItem [] [ div [ class "flex h-7 items-center px-2" ] [ Skeleton.view [ class ("h-3.5 " ++ width) ] ] ])
-                            [ "w-20", "w-28", "w-16" ]
-                )
+              else
+                Html.button
+                    ([ type_ "button"
+                     , onClick (Cleared facet)
+                     , attribute "aria-label" ("Clear " ++ String.toLower (Filters.facetLabel facet))
+                     ]
+                        ++ Badge.toAttributes (Badge.new |> Badge.text "")
+                        ++ [ class "cursor-pointer pe-1.5 tabular-nums hover:bg-primary/85" ]
+                    )
+                    [ text (String.fromInt (Set.size wanted))
+                    , Icon.view "" Icon.close
+                    ]
             ]
+        , Sidebar.menu []
+            (case tallies of
+                Just counted ->
+                    facetEntries model facet wanted counted
 
-        -- Beside the trigger rather than in it: a button inside a <summary> would also
-        -- open and close the section.
-        , if Set.isEmpty wanted then
-            text ""
-
-          else
-            Html.button
-                ([ type_ "button"
-                 , onClick (Cleared facet)
-                 , attribute "aria-label" ("Clear " ++ String.toLower (Filters.facetLabel facet))
-                 ]
-                    ++ Badge.toAttributes (Badge.new |> Badge.text "")
-                    ++ [ class "absolute end-8 top-1.5 cursor-pointer pe-1.5 tabular-nums hover:bg-primary/85" ]
-                )
-                [ text (String.fromInt (Set.size wanted))
-                , Icon.view "" Icon.close
-                ]
+                Nothing ->
+                    List.map
+                        (\width -> Sidebar.menuItem [] [ Sidebar.menuSkeleton [ Sidebar.showIcon, class width ] ])
+                        [ "[--skeleton-width:55%]", "[--skeleton-width:70%]", "[--skeleton-width:45%]", "[--skeleton-width:60%]" ]
+            )
         ]
 
 
@@ -1837,41 +1831,28 @@ facetEntries model facet wanted tallies =
         hidden =
             min 100 (List.length listed) - List.length shown
 
-        muted attrs icon label =
-            Sidebar.menuSubItem []
-                [ Sidebar.menuSubButton (class "text-sidebar-foreground/70 [&>svg]:text-current!" :: attrs)
+        toggle icon label =
+            Sidebar.menuItem []
+                [ Sidebar.menuButton [ onClick (MoreToggled facet), class "text-sidebar-foreground/70" ]
                     [ Icon.view "" icon, span [] [ text label ] ]
                 ]
     in
     List.map (facetItem facet wanted (\owner -> shelfOf model |> Maybe.andThen (.index >> Index.avatar owner))) shown
         ++ (if hidden > 0 then
-                [ muted [ onClick (MoreToggled facet) ] Icon.caretDown (String.fromInt hidden ++ " more") ]
+                [ toggle Icon.caretDown (String.fromInt hidden ++ " more") ]
 
             else if expanded && List.length listed > 8 then
-                [ muted [ onClick (MoreToggled facet) ] Icon.caretUp "Show less" ]
+                [ toggle Icon.caretUp "Show less" ]
 
             else
                 []
            )
         ++ (if List.isEmpty listed then
-                [ Sidebar.menuSubItem [] [ div [ class "flex h-7 items-center px-2 text-sm text-muted-foreground" ] [ text "None" ] ] ]
+                [ Sidebar.menuItem [] [ div [ class "flex h-8 items-center px-2 text-sm text-muted-foreground" ] [ text "None" ] ] ]
 
             else
                 []
            )
-
-
-facetIcon : Facet -> Icon.Icon
-facetIcon facet =
-    case facet of
-        Filters.Language ->
-            Icon.code
-
-        Filters.Topic ->
-            Icon.hash
-
-        Filters.Owner ->
-            Icon.users
 
 
 facetItem : Facet -> Set.Set String -> (String -> Maybe String) -> ( String, Int ) -> Html Msg
@@ -1880,9 +1861,9 @@ facetItem facet wanted avatarOf ( value, count ) =
         isPicked =
             Set.member value wanted
     in
-    Sidebar.menuSubItem []
-        [ Sidebar.menuSubButton
-            ([ onClick (Picked facet value), attribute "aria-pressed" (boolString isPicked), class "w-full" ]
+    Sidebar.menuItem []
+        [ Sidebar.menuButton
+            ([ onClick (Picked facet value), attribute "aria-pressed" (boolString isPicked) ]
                 ++ (if isPicked then
                         [ Sidebar.active ]
 
@@ -1904,9 +1885,9 @@ facetItem facet wanted avatarOf ( value, count ) =
 
                         Nothing ->
                             span [ class "size-4 shrink-0 rounded-full bg-muted" ] []
-            , span [ class "flex-1 truncate text-start" ] [ text value ]
-            , span [ class "text-xs text-muted-foreground tabular-nums" ] [ text (Format.compact count) ]
+            , span [] [ text value ]
             ]
+        , Sidebar.menuBadge [ class "text-muted-foreground" ] [ text (Format.compact count) ]
         ]
 
 
