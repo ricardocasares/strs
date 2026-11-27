@@ -1576,12 +1576,19 @@ viewFilters model =
             model.filters
     in
     [ Sidebar.group []
-        [ Sidebar.groupLabel [] [ text "Filters" ]
-        , if Filters.isInitial filters then
-            text ""
+        [ Sidebar.groupLabel [ class "justify-between pe-0" ]
+            [ text "Filters"
+            , if Filters.isInitial filters then
+                text ""
 
-          else
-            Sidebar.groupAction [ onClick FiltersReset, attribute "aria-label" "Reset filters" ] [ Icon.view "" Icon.reset ]
+              else
+                Button.new
+                    |> Button.text "Clear all"
+                    |> Button.startIcon (Icon.bold "" Icon.close)
+                    |> Button.ghost
+                    |> Button.extraSmall
+                    |> Button.toHtml [ onClick FiltersReset, class "-me-1 text-sidebar-foreground" ]
+            ]
         , Sidebar.groupContent [ class "flex flex-col gap-2 px-1" ]
             [ segmented "Status"
                 LifecycleChosen
