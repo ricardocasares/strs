@@ -606,6 +606,8 @@
 
 @layer base {
   html {
+    /* The sidebar sticks at one viewport tall; overscrolling would pull the page past it. */
+    overscroll-behavior: none;
     -webkit-tap-highlight-color: transparent;
     text-rendering: optimizeLegibility;
     -webkit-font-smoothing: antialiased;
