@@ -1454,7 +1454,7 @@ viewIdentity session =
     case session.account of
         Known profile ->
             layout
-                (userAvatar profile.avatar login [ class "size-8" ])
+                (userAvatar "bg-sidebar" profile.avatar login [ class "size-8" ])
                 (span [ class "truncate text-sm font-medium" ] [ text (Profile.displayName profile) ])
 
         Unknown ->
@@ -1474,11 +1474,14 @@ viewIdentity session =
                 (span [ class "truncate text-sm font-medium" ] [ text login ])
 
 
-userAvatar : String -> String -> List (Html.Attribute Msg) -> Html Msg
-userAvatar url login attrs =
+{-| The image sits on the fallback, so it gets the colour of the surface around it: logos with
+transparent parts then look as they do on GitHub, instead of showing the initial through.
+-}
+userAvatar : String -> String -> String -> List (Html.Attribute Msg) -> Html Msg
+userAvatar surface url login attrs =
     Avatar.new
         |> Avatar.fallback [ text (String.toUpper (String.left 1 login)) ]
-        |> Avatar.img [ src (Profile.avatar 80 url), alt "" ]
+        |> Avatar.img [ src (Profile.avatar 80 url), alt "", class surface ]
         |> Avatar.toHtml (attribute "aria-hidden" "true" :: attrs)
 
 
@@ -1502,7 +1505,7 @@ accountMenu model session =
                         [ onClick (BrowseSubmitted (Maybe.withDefault session.login (Login.fromString summary.login))) ]
                         [ case summary.profile of
                             Just profile ->
-                                userAvatar profile.avatar summary.login [ class "size-5" ]
+                                userAvatar "bg-popover" profile.avatar summary.login [ class "size-5" ]
 
                             Nothing ->
                                 Avatar.new |> Avatar.fallback [ text (String.toUpper (String.left 1 summary.login)) ] |> Avatar.toHtml [ class "size-5 text-[10px]" ]
@@ -1801,7 +1804,7 @@ facetItem facet wanted avatars ( value, count ) =
                 Filters.Owner ->
                     case Dict.get value avatars of
                         Just url ->
-                            Html.img [ src (Profile.avatar 32 url), alt "", class "size-4 shrink-0 rounded-full bg-muted", attribute "loading" "lazy" ] []
+                            Html.img [ src (Profile.avatar 32 url), alt "", class "size-4 shrink-0 rounded-full bg-sidebar ring-1 ring-sidebar-border", attribute "loading" "lazy" ] []
 
                         Nothing ->
                             span [ class "size-4 shrink-0 rounded-full bg-muted" ] []
@@ -2295,7 +2298,7 @@ viewHit now order query color repo =
             |> Item.media
                 [ Avatar.new
                     |> Avatar.fallback [ text (String.toUpper (String.left 1 repo.owner)) ]
-                    |> Avatar.img [ src (Profile.avatar 64 repo.avatar), alt "", attribute "loading" "lazy", attribute "decoding" "async" ]
+                    |> Avatar.img [ src (Profile.avatar 64 repo.avatar), alt "", class "bg-background transition-colors duration-100 group-hover/item:bg-muted", attribute "loading" "lazy", attribute "decoding" "async" ]
                     |> Avatar.toHtml [ class "size-8", attribute "aria-hidden" "true" ]
                 ]
             |> Item.title
