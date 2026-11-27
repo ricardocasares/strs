@@ -74,6 +74,8 @@ IntersectionObserver element. Don't move logic there.
 - `Sync.elm`: incremental sync as pure functions. Full syncs walk every page and prune;
   deltas stop at the first star already known. The cursor is saved with every page.
 - `Index.elm`: BM25F with prefix matching. `Tokens.elm` splits words and highlights.
+- `Link.elm`: the query, filters and sort in the URL's query string, so views can be shared.
+  The URL is rewritten with `replaceUrl` once typing pauses, never per keystroke.
 - `Main.elm`: the state machine (`Sync`: `Idle | Running | Paused | Stalled`), the
   rate-limit budget, and the views.
 

@@ -1,7 +1,7 @@
 module Filters exposing
     ( Filters, Choice(..), initial, isInitial, matches
     , Facet(..), facets, facetLabel, picked, pick, clear, valuesOf, hasPicks
-    , Stars, starsFromSlider, starsToSlider, starsLabel, tierCount, isAnyStars
+    , Stars, starsFromSlider, starsToSlider, starsLabel, tierCount, isAnyStars, starsToString, starsFromString
     , Order(..), orders, orderLabel
     )
 
@@ -227,6 +227,64 @@ starsFromSlider ( low, high ) =
 starsToSlider : Stars -> ( Float, Float )
 starsToSlider (Stars low high) =
     ( toFloat low, toFloat high )
+
+
+{-| The range as star counts for a link: `1000-`, `10-1000`, `-100`, or nothing for any.
+-}
+starsToString : Stars -> String
+starsToString (Stars low high) =
+    if Stars low high == anyStars then
+        ""
+
+    else
+        (if low == 0 then
+            ""
+
+         else
+            Maybe.withDefault "" (Maybe.map String.fromInt (tier low))
+        )
+            ++ "-"
+            ++ Maybe.withDefault "" (Maybe.map String.fromInt (tier high))
+
+
+{-| Reads what `starsToString` wrote. Counts that aren't tiers, and backwards ranges, don't
+parse.
+-}
+starsFromString : String -> Maybe Stars
+starsFromString text =
+    let
+        indexOf count =
+            Array.toIndexedList tiers
+                |> List.filter (\( _, value ) -> String.fromInt value == count)
+                |> List.head
+                |> Maybe.map Tuple.first
+    in
+    case String.split "-" text of
+        [ low, high ] ->
+            Maybe.map2
+                (\from to ->
+                    if from <= to then
+                        Just (Stars from to)
+
+                    else
+                        Nothing
+                )
+                (if low == "" then
+                    Just 0
+
+                 else
+                    indexOf low
+                )
+                (if high == "" then
+                    Just tierCount
+
+                 else
+                    indexOf high
+                )
+                |> Maybe.andThen identity
+
+        _ ->
+            Nothing
 
 
 tier : Int -> Maybe Int

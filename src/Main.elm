@@ -20,6 +20,7 @@ import InteropPorts
 import Json.Decode as Decode exposing (Decoder)
 import Json.Encode as Encode
 import Language
+import Link
 import Login exposing (Login)
 import Logo
 import Process
@@ -81,6 +82,7 @@ type alias Model =
     , expanded : List Facet
     , order : Order
     , limit : Int
+    , linkVersion : Int
     , page : Page
     }
 
@@ -243,13 +245,14 @@ init json url key =
             , expanded = []
             , order = Relevance
             , limit = pageSize
+            , linkVersion = 0
             , page = Invalid ""
             }
 
         ( routed, cmd ) =
             route url model
     in
-    ( routed
+    ( share (Link.parse url) routed
     , Cmd.batch
         [ cmd
         , InteropPorts.fromElm Interop.LoadAccounts
@@ -481,6 +484,7 @@ type Msg
     | QueryCleared
     | SearchFocused
     | Ignored
+    | LinkSettled Int
     | LifecycleChosen (Choice Lifecycle)
     | OriginChosen (Choice Origin)
     | StarsChanged ( Float, Float )
@@ -500,8 +504,38 @@ type Msg
     | ProfileOpened String
 
 
+{-| Every change to what a link carries rewrites the URL, once typing has paused: browsers
+limit how often a page may replace its URL, and the history needs no entry per keystroke.
+-}
 update : Msg -> Model -> ( Model, Cmd Msg )
 update msg model =
+    let
+        ( next, cmd ) =
+            handle msg model
+    in
+    if shared next /= shared model then
+        ( { next | linkVersion = next.linkVersion + 1 }
+        , Cmd.batch [ cmd, Task.perform (\_ -> LinkSettled (next.linkVersion + 1)) (Process.sleep 400) ]
+        )
+
+    else
+        ( next, cmd )
+
+
+shared : Model -> Link.Shared
+shared model =
+    { query = model.query, filters = model.filters, order = model.order }
+
+
+{-| Shows what a link carries.
+-}
+share : Link.Shared -> Model -> Model
+share link model =
+    refresh { model | query = link.query, filters = link.filters, order = link.order, limit = pageSize }
+
+
+handle : Msg -> Model -> ( Model, Cmd Msg )
+handle msg model =
     case msg of
         LinkClicked (Browser.Internal url) ->
             ( model, Nav.pushUrl model.key (Url.toString url) )
@@ -509,8 +543,30 @@ update msg model =
         LinkClicked (Browser.External url) ->
             ( model, Nav.load url )
 
+        -- A link to another user can carry filters; the app's own URL rewrites never change
+        -- the user, so their query is what the model already shows.
         UrlChanged url ->
-            route url model
+            let
+                ( next, cmd ) =
+                    route url model
+            in
+            if loginOf next /= loginOf model && url.query /= Nothing then
+                ( share (Link.parse url) next, cmd )
+
+            else
+                ( next, cmd )
+
+        LinkSettled version ->
+            if version == model.linkVersion then
+                case model.page of
+                    Stars session ->
+                        ( model, Nav.replaceUrl model.key (model.base ++ Login.toString session.login ++ Link.toQuery (shared model)) )
+
+                    Invalid _ ->
+                        ( model, Cmd.none )
+
+            else
+                ( model, Cmd.none )
 
         Tick now ->
             ( { model | now = now }, Cmd.none )
@@ -630,6 +686,16 @@ update msg model =
 
         ProfileOpened url ->
             ( model, InteropPorts.fromElm (Interop.OpenUrl url) )
+
+
+loginOf : Model -> Maybe Login
+loginOf model =
+    case model.page of
+        Stars session ->
+            Just session.login
+
+        Invalid _ ->
+            Nothing
 
 
 setFilters : (Filters -> Filters) -> Model -> ( Model, Cmd Msg )
