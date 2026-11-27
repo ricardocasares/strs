@@ -1652,7 +1652,7 @@ viewFilters model =
     , stars =
         group Icon.star "Stars"
         [ if Filters.isAnyStars filters.stars then
-            span [ class "font-normal text-sidebar-foreground tabular-nums" ] [ text (Filters.starsLabel filters.stars) ]
+            text ""
 
           else
             -- The range, as a badge that resets it.
