@@ -1,14 +1,13 @@
 module Filters exposing
     ( Filters, Choice(..), initial, isInitial, matches
     , Facet(..), facets, facetLabel, picked, pick, clear, valuesOf, hasPicks
-    , Stars, starsFromSlider, starsToSlider, starsLabel, tierCount, isAnyStars, starsToString, starsFromString
+    , Stars, anyStars, isAnyStars, stops, starsFromSlider, starsToSlider, starsLabel, starsToString, starsFromString
     , Sort(..), Key(..), Direction(..), keys, keyLabel, flip
     )
 
 {-| What narrows and orders the list, apart from the query.
 -}
 
-import Array exposing (Array)
 import Format
 import Repo exposing (Lifecycle, Origin, Repo)
 import Set exposing (Set)
@@ -188,26 +187,16 @@ valuesOf facet repo =
 -- STARS
 
 
-{-| A range of star counts on a log scale: the low and high tiers, low never above high.
-The top tier has no upper bound.
+{-| A range of star counts, either end open. Open ends follow the library: an open low end
+starts at its fewest stars, an open high end goes up to its most. Low is never above high.
 -}
 type Stars
-    = Stars Int Int
-
-
-tiers : Array Int
-tiers =
-    Array.fromList [ 0, 10, 100, 1000, 10000, 100000 ]
-
-
-tierCount : Int
-tierCount =
-    Array.length tiers
+    = Stars (Maybe Int) (Maybe Int)
 
 
 anyStars : Stars
 anyStars =
-    Stars 0 tierCount
+    Stars Nothing Nothing
 
 
 isAnyStars : Stars -> Bool
@@ -215,140 +204,155 @@ isAnyStars stars =
     stars == anyStars
 
 
-starsFromSlider : ( Float, Float ) -> Stars
-starsFromSlider ( low, high ) =
-    let
-        clampTier =
-            round >> clamp 0 tierCount
-    in
-    Stars (min (clampTier low) (clampTier high)) (max (clampTier low) (clampTier high))
-
-
-starsToSlider : Stars -> ( Float, Float )
-starsToSlider (Stars low high) =
-    ( toFloat low, toFloat high )
-
-
-{-| The range as star counts for a link: `1000-`, `10-1000`, `-100`, or nothing for any.
--}
-starsToString : Stars -> String
-starsToString stars =
-    let
-        ( low, high ) =
-            span stars
-    in
-    if stars == anyStars then
-        ""
-
-    else
-        (if low == 0 then
-            ""
-
-         else
-            Maybe.withDefault "" (Maybe.map String.fromInt (tier low))
-        )
-            ++ "-"
-            ++ Maybe.withDefault "" (Maybe.map String.fromInt (tier high))
-
-
-{-| Reads what `starsToString` wrote. Counts that aren't tiers, and backwards ranges, don't
-parse.
--}
-starsFromString : String -> Maybe Stars
-starsFromString text =
-    let
-        indexOf count =
-            Array.toIndexedList tiers
-                |> List.filter (\( _, value ) -> String.fromInt value == count)
-                |> List.head
-                |> Maybe.map Tuple.first
-    in
-    case String.split "-" text of
-        [ low, high ] ->
-            Maybe.map2
-                (\from to ->
-                    if from <= to then
-                        Just (Stars from to)
-
-                    else
-                        Nothing
-                )
-                (if low == "" then
-                    Just 0
-
-                 else
-                    indexOf low
-                )
-                (if high == "" then
-                    Just tierCount
-
-                 else
-                    indexOf high
-                )
-                |> Maybe.andThen identity
-
-        _ ->
-            Nothing
-
-
-tier : Int -> Maybe Int
-tier index =
-    Array.get index tiers
-
-
-{-| The tiers a range covers. When both thumbs sit on the same stop, the range is the step
-that starts there: both on 1k means 1k–10k, both at the top means 100k and up. A range never
-narrows down to a single count.
--}
-span : Stars -> ( Int, Int )
-span (Stars low high) =
-    if low < high then
-        ( low, high )
-
-    else if low < tierCount then
-        ( low, low + 1 )
-
-    else
-        ( tierCount - 1, tierCount )
-
-
 inStars : Stars -> Int -> Bool
-inStars stars count =
-    let
-        ( low, high ) =
-            span stars
-    in
-    (Maybe.withDefault 0 (tier low) <= count)
-        && (case tier high of
-                Just bound ->
-                    count <= bound
+inStars (Stars low high) count =
+    Maybe.withDefault True (Maybe.map (\bound -> bound <= count) low)
+        && Maybe.withDefault True (Maybe.map (\bound -> count <= bound) high)
 
-                Nothing ->
-                    True
+
+{-| The slider's stops for a library with these fewest and most stars: its two ends, and the
+powers of ten in between, so the scale is logarithmic and never leaves the real counts.
+-}
+stops : ( Int, Int ) -> List Int
+stops ( fewest, most ) =
+    fewest
+        :: List.filter (\step -> fewest < step && step < most) [ 10, 100, 1000, 10000, 100000, 1000000 ]
+        ++ (if most > fewest then
+                [ most ]
+
+            else
+                []
            )
 
 
-starsLabel : Stars -> String
-starsLabel stars =
+{-| Where the thumbs sit for a range: an open end at its end of the scale, a bound at the
+first stop that reaches it.
+-}
+starsToSlider : List Int -> Stars -> ( Float, Float )
+starsToSlider scale (Stars low high) =
     let
-        ( low, high ) =
-            span stars
+        last =
+            List.length scale - 1
+
+        position bound =
+            scale
+                |> List.indexedMap Tuple.pair
+                |> List.filter (\( _, step ) -> step >= bound)
+                |> List.head
+                |> Maybe.map Tuple.first
+                |> Maybe.withDefault last
     in
-    case ( tier low, tier high ) of
-        ( Just 0, Nothing ) ->
+    ( Maybe.map position low |> Maybe.withDefault 0 |> toFloat
+    , Maybe.map position high |> Maybe.withDefault last |> toFloat
+    )
+
+
+{-| The range the thumbs pick. A thumb on an end of the scale leaves that end open, so the
+range keeps following the library as it grows.
+-}
+starsFromSlider : List Int -> ( Float, Float ) -> Stars
+starsFromSlider scale ( low, high ) =
+    let
+        last =
+            List.length scale - 1
+
+        at index =
+            List.drop index scale |> List.head
+
+        lowIndex =
+            clamp 0 last (round (min low high))
+
+        highIndex =
+            clamp 0 last (round (max low high))
+    in
+    Stars
+        (if lowIndex == 0 then
+            if highIndex == 0 then
+                -- Both thumbs on the fewest stars: exactly that many.
+                at 0
+
+            else
+                Nothing
+
+         else
+            at lowIndex
+        )
+        (if highIndex == last then
+            if lowIndex == last then
+                at last
+
+            else
+                Nothing
+
+         else
+            at highIndex
+        )
+
+
+starsLabel : Stars -> String
+starsLabel (Stars low high) =
+    case ( low, high ) of
+        ( Nothing, Nothing ) ->
             "Any"
 
         ( Just from, Nothing ) ->
             Format.compact from ++ "+"
 
-        ( Just 0, Just to ) ->
+        ( Nothing, Just to ) ->
             "≤ " ++ Format.compact to
 
         ( Just from, Just to ) ->
-            Format.compact from ++ "–" ++ Format.compact to
+            if from == to then
+                Format.compact from
 
-        ( Nothing, _ ) ->
-            "Any"
+            else
+                Format.compact from ++ "–" ++ Format.compact to
+
+
+{-| The range for a link: `1000-`, `10-1000`, `-100`, or nothing for any.
+-}
+starsToString : Stars -> String
+starsToString (Stars low high) =
+    if low == Nothing && high == Nothing then
+        ""
+
+    else
+        Maybe.withDefault "" (Maybe.map String.fromInt low)
+            ++ "-"
+            ++ Maybe.withDefault "" (Maybe.map String.fromInt high)
+
+
+{-| Reads what `starsToString` wrote. Backwards ranges don't parse.
+-}
+starsFromString : String -> Maybe Stars
+starsFromString text =
+    let
+        bound part =
+            if part == "" then
+                Just Nothing
+
+            else
+                Maybe.map Just (String.toInt part)
+    in
+    case String.split "-" text of
+        [ low, high ] ->
+            Maybe.map2 Tuple.pair (bound low) (bound high)
+                |> Maybe.andThen
+                    (\( from, to ) ->
+                        case ( from, to ) of
+                            ( Just a, Just b ) ->
+                                if a <= b then
+                                    Just (Stars from to)
+
+                                else
+                                    Nothing
+
+                            _ ->
+                                Just (Stars from to)
+                    )
+
+        _ ->
+            Nothing
 
 
 

@@ -503,7 +503,7 @@ type Msg
     | LinkSettled Int
     | LifecycleChosen (Choice Lifecycle)
     | OriginChosen (Choice Origin)
-    | StarsChanged ( Float, Float )
+    | StarsChanged Filters.Stars
     | Picked Facet String
     | Cleared Facet
     | MoreToggled Facet
@@ -643,8 +643,8 @@ handle msg model =
         OriginChosen choice ->
             setFilters (\filters -> { filters | origin = choice }) model
 
-        StarsChanged range ->
-            setFilters (\filters -> { filters | stars = Filters.starsFromSlider range }) model
+        StarsChanged stars ->
+            setFilters (\filters -> { filters | stars = stars }) model
 
         Picked facet value ->
             setFilters (Filters.pick facet value) model
@@ -1848,7 +1848,8 @@ viewFilters model =
         ]
     , stars =
         -- As elmcn's range slider example, under the section's label: the value beside it is
-        -- the badge that clears it, and nothing while every count passes.
+        -- the badge that clears it, and nothing while every count passes. The scale runs
+        -- between the library's fewest and most stars.
         group Icon.shootingStar "Stargazers"
             [ if Filters.isAnyStars filters.stars then
                 text ""
@@ -1856,39 +1857,43 @@ viewFilters model =
               else
                 clearBadge (Filters.starsLabel filters.stars)
                     ("Clear stargazers: " ++ Filters.starsLabel filters.stars)
-                    (StarsChanged ( 0, toFloat Filters.tierCount ))
+                    (StarsChanged Filters.anyStars)
             ]
-            [ div [ class "px-1 pt-2 pb-1" ]
-                [ Slider.new
-                    |> Slider.range (Tuple.first (Filters.starsToSlider filters.stars)) (Tuple.second (Filters.starsToSlider filters.stars))
-                    |> Slider.onChange StarsChanged
-                    |> Slider.min 0
-                    |> Slider.max (toFloat Filters.tierCount)
-                    |> Slider.step 1
-                    |> Slider.toHtml [ attribute "aria-label" "Stargazers" ]
-                , case shelfOf model of
-                    Just shelf ->
-                        Html.Lazy.lazy viewStarBounds shelf.index
+            [ case shelfOf model |> Maybe.andThen (.index >> Index.starBounds) of
+                Just bounds ->
+                    viewStarsSlider (Filters.stops bounds) filters.stars
 
-                    Nothing ->
-                        text ""
-                ]
+                Nothing ->
+                    div [ class "px-1 pt-2 pb-1" ] [ Skeleton.view [ class "h-1 w-full" ] ]
             ]
     }
 
 
-{-| The ends of the stargazers scale: the fewest and the most stars in the library, worked
-out again only when the library changes.
--}
-viewStarBounds : Index -> Html msg
-viewStarBounds index =
-    case Index.starBounds index of
-        Just ( low, high ) ->
-            div [ class "mt-2 flex justify-between text-xs text-muted-foreground tabular-nums", attribute "aria-hidden" "true" ]
-                [ span [] [ text (Format.compact low) ], span [] [ text (Format.compact high) ] ]
+viewStarsSlider : List Int -> Filters.Stars -> Html Msg
+viewStarsSlider scale stars =
+    let
+        ( low, high ) =
+            Filters.starsToSlider scale stars
 
-        Nothing ->
-            text ""
+        ends =
+            ( List.head scale, List.head (List.reverse scale) )
+    in
+    div [ class "px-1 pt-2 pb-1" ]
+        [ Slider.new
+            |> Slider.range low high
+            |> Slider.onChange (Filters.starsFromSlider scale >> StarsChanged)
+            |> Slider.min 0
+            |> Slider.max (toFloat (max 1 (List.length scale - 1)))
+            |> Slider.step 1
+            |> Slider.toHtml [ attribute "aria-label" "Stargazers" ]
+        , case ends of
+            ( Just fewest, Just most ) ->
+                div [ class "mt-2 flex justify-between text-xs text-muted-foreground tabular-nums", attribute "aria-hidden" "true" ]
+                    [ span [] [ text (Format.compact fewest) ], span [] [ text (Format.compact most) ] ]
+
+            _ ->
+                text ""
+        ]
 
 
 {-| A group label's icon and text.
