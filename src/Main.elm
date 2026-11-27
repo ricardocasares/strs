@@ -1519,9 +1519,20 @@ viewIdentity session =
                         text ""
                 ]
 
+        dot =
+            case ( session.account, session.library ) of
+                ( Missing, _ ) ->
+                    text ""
+
+                ( _, Open shelf ) ->
+                    syncDot (syncTone shelf)
+
+                ( _, Opening ) ->
+                    text ""
+
         layout avatar title =
             span [ class "flex min-w-0 flex-1 items-center gap-2" ]
-                [ avatar
+                [ span [ class "relative shrink-0" ] [ avatar, dot ]
                 , span [ class "grid min-w-0 flex-1 text-start leading-tight" ] [ title, subtitle ]
                 ]
     in
@@ -1567,13 +1578,22 @@ tile classes login avatar =
         ]
 
 
-{-| Two sections: these stars, and the theme.
+{-| Whose stars these are, then their sync, then the theme. Where syncing stands is a line of
+text, never a button: the action beside it is the one that fits.
 -}
 accountMenu : Model -> Session -> List (DropdownMenu.Item Msg)
 accountMenu model session =
     let
-        current =
+        login =
             Login.toString session.login
+
+        ( name, avatar ) =
+            case session.account of
+                Known profile ->
+                    ( Profile.displayName profile, Just profile.avatar )
+
+                _ ->
+                    ( login, Nothing )
 
         action attrs icon label =
             DropdownMenu.item attrs [ Icon.view "" icon, text label ]
@@ -1583,9 +1603,38 @@ accountMenu model session =
                 ( Missing, _ ) ->
                     []
 
+                ( _, Opening ) ->
+                    []
+
                 ( _, Open shelf ) ->
-                    [ syncItem model session shelf
-                    , action [ onClick (SyncRequested Sync.Rebuild) ] Icon.refresh "Resync all"
+                    let
+                        state =
+                            syncState model shelf
+                    in
+                    [ DropdownMenu.separator
+                    , DropdownMenu.label [ text "Sync" ]
+                    , DropdownMenu.label
+                        [ div [ class "flex items-center gap-2 py-0.5 text-sm font-normal text-muted-foreground", attribute "role" "status" ]
+                            [ Icon.view
+                                (if state.tone == Busy then
+                                    "animate-spin [animation-duration:1.5s]"
+
+                                 else
+                                    ""
+                                )
+                                state.icon
+                            , span [ class "tabular-nums" ] [ text state.label ]
+                            ]
+                        ]
+                    , DropdownMenu.group
+                        (case state.action of
+                            Just ( label, msg ) ->
+                                [ action [ onClick msg ] Icon.refresh label ]
+
+                            Nothing ->
+                                []
+                        )
+                    , action [ onClick (SyncRequested Sync.Rebuild) ] Icon.fullResync "Full resync"
                         |> (if isSyncing session then
                                 DropdownMenu.disabled
 
@@ -1593,19 +1642,139 @@ accountMenu model session =
                                 identity
                            )
                     ]
-
-                ( _, Opening ) ->
-                    []
     in
-    [ DropdownMenu.label [ text "Stars" ]
-    , DropdownMenu.group
-        (action [ onClick (ProfileOpened ("https://github.com/" ++ current ++ "?tab=stars")) ] Icon.external "Open on GitHub"
-            :: sync
-        )
+    [ DropdownMenu.label
+        [ div [ class "flex items-center gap-2 py-0.5 text-start font-normal text-popover-foreground" ]
+            [ tile "size-8 rounded-lg" login avatar
+            , span [ class "grid min-w-0 flex-1 leading-tight" ]
+                [ span [ class "truncate text-sm font-medium" ] [ text name ]
+                , span [ class "truncate text-xs text-muted-foreground" ] [ text ("@" ++ login) ]
+                ]
+            ]
+        ]
     , DropdownMenu.separator
-    , DropdownMenu.label [ text "Theme" ]
-    , DropdownMenu.label [ div [ class "pb-1" ] [ themeSwitch model ] ]
+    , action [ onClick (ProfileOpened ("https://github.com/" ++ login ++ "?tab=stars")) ] Icon.external "Open on GitHub"
     ]
+        ++ sync
+        ++ [ DropdownMenu.separator
+           , DropdownMenu.label [ text "Theme" ]
+           , DropdownMenu.label [ div [ class "pb-1" ] [ themeSwitch model ] ]
+           ]
+
+
+{-| How syncing feels at a glance: fine, working, waiting on GitHub, or stuck.
+-}
+type Tone
+    = Calm
+    | Busy
+    | Waiting
+    | Broken
+
+
+syncTone : Shelf -> Tone
+syncTone shelf =
+    case shelf.sync of
+        Idle ->
+            Calm
+
+        Running _ ->
+            Busy
+
+        Paused _ { reason } ->
+            case reason of
+                Limited ->
+                    Waiting
+
+                Backoff ->
+                    Busy
+
+        Stalled _ _ ->
+            Broken
+
+
+{-| The status line, and the action that fits it: sync when idle, retry when held up, none
+while it runs.
+-}
+syncState : Model -> Shelf -> { icon : Icon.Icon, label : String, tone : Tone, action : Maybe ( String, Msg ) }
+syncState model shelf =
+    let
+        tone =
+            syncTone shelf
+    in
+    case shelf.sync of
+        Running run ->
+            { icon = Icon.refresh
+            , label =
+                case Sync.progress run.job of
+                    Just fraction ->
+                        "Syncing " ++ String.fromInt (round (fraction * 100)) ++ "%"
+
+                    Nothing ->
+                        "Syncing…"
+            , tone = tone
+            , action = Nothing
+            }
+
+        Paused _ { until, reason } ->
+            case reason of
+                Limited ->
+                    { icon = Icon.clock, label = "Paused until " ++ Format.clock model.zone until, tone = tone, action = Just ( "Retry now", RetryRequested ) }
+
+                Backoff ->
+                    { icon = Icon.refresh, label = "Retrying…", tone = tone, action = Nothing }
+
+        Stalled _ problem ->
+            { icon = Icon.warning
+            , label =
+                case problem of
+                    GitHub.Offline ->
+                        "Offline"
+
+                    _ ->
+                        "Sync failed"
+            , tone = tone
+            , action = Just ( "Retry now", RetryRequested )
+            }
+
+        Idle ->
+            case Sync.syncedAt shelf.cursor of
+                Just at ->
+                    { icon = Icon.synced
+                    , label =
+                        case Format.ago model.now at of
+                            "now" ->
+                                "Synced just now"
+
+                            ago ->
+                                "Synced " ++ ago ++ " ago"
+                    , tone = tone
+                    , action = Just ( "Sync now", SyncRequested Sync.Refresh )
+                    }
+
+                Nothing ->
+                    { icon = Icon.pending, label = "Not synced", tone = tone, action = Just ( "Sync now", SyncRequested Sync.Refresh ) }
+
+
+{-| A dot on the avatar in the sidebar, for a sync that needs a look without opening the menu.
+-}
+syncDot : Tone -> Html msg
+syncDot tone =
+    let
+        dot classes =
+            span [ class ("absolute -end-0.5 -bottom-0.5 size-2.5 rounded-full ring-2 ring-sidebar " ++ classes), attribute "aria-hidden" "true" ] []
+    in
+    case tone of
+        Calm ->
+            text ""
+
+        Busy ->
+            dot "animate-spin border-[1.5px] border-sidebar-foreground border-t-transparent bg-sidebar [animation-duration:1s]"
+
+        Waiting ->
+            dot "bg-amber-500"
+
+        Broken ->
+            dot "bg-destructive"
 
 
 {-| Syncing is held up for longer than a skeleton should pulse.
@@ -1981,71 +2150,6 @@ shelfOf model =
 -- FOOTER
 
 
-{-| Where syncing stands, and the way to sync again or retry.
--}
-syncItem : Model -> Session -> Shelf -> DropdownMenu.Item Msg
-syncItem model session shelf =
-    let
-        ( label, spinning, msg ) =
-            case ( session.account, shelf.sync ) of
-                ( _, Running run ) ->
-                    ( case ( run.job, Sync.progress run.job ) of
-                        ( _, Just fraction ) ->
-                            "Syncing " ++ String.fromInt (round (fraction * 100)) ++ "%"
-
-                        _ ->
-                            "Syncing…"
-                    , True
-                    , Nothing
-                    )
-
-                ( _, Paused _ { until, reason } ) ->
-                    case reason of
-                        Limited ->
-                            ( "Paused until " ++ Format.clock model.zone until, False, Just RetryRequested )
-
-                        Backoff ->
-                            ( "Retrying…", True, Just RetryRequested )
-
-                ( _, Stalled _ _ ) ->
-                    ( "Sync failed", False, Just RetryRequested )
-
-                ( _, Idle ) ->
-                    ( case Sync.syncedAt shelf.cursor of
-                        Just at ->
-                            case Format.ago model.now at of
-                                "now" ->
-                                    "Synced just now"
-
-                                ago ->
-                                    "Synced " ++ ago ++ " ago"
-
-                        Nothing ->
-                            "Not synced"
-                    , False
-                    , Just (SyncRequested Sync.Refresh)
-                    )
-    in
-    DropdownMenu.item (attribute "aria-busy" (boolString spinning) :: (Maybe.map onClick msg |> Maybe.map List.singleton |> Maybe.withDefault []))
-        [ Icon.view
-            (if spinning then
-                "animate-spin [animation-duration:1.5s]"
-
-             else
-                ""
-            )
-            Icon.refresh
-        , span [ class "tabular-nums" ] [ text label ]
-        ]
-        |> (case msg of
-                Just _ ->
-                    identity
-
-                Nothing ->
-                    DropdownMenu.disabled
-           )
-
-
 {-| Light, dark or the system's: three icons in one rounded frame, the current one filled.
 -}
 themeSwitch : Model -> Html Msg
@@ -2075,7 +2179,7 @@ viewTopBar model =
     Html.header [ class "sticky top-0 z-20 border-b bg-background/85 backdrop-blur-md supports-[backdrop-filter]:bg-background/70" ]
         -- From md up, three columns: the toggle, the search as wide as the results and centred
         -- like them, and an empty column as wide as the first to keep it there.
-        [ div [ class "flex h-14 w-full items-center gap-2 px-3 md:grid md:grid-cols-[1fr_minmax(0,46rem)_1fr] md:px-4" ]
+        [ div [ class "flex h-14 w-full items-center gap-2 px-3 md:grid md:grid-cols-[minmax(min-content,1fr)_minmax(0,46rem)_minmax(0,1fr)] md:px-4" ]
             [ div [ class "flex items-center gap-2 self-stretch" ]
                 [ Sidebar.trigger [ class "-ms-1 size-9 md:size-8" ] model.sidebar SidebarChanged
                 , Separator.new
@@ -2083,9 +2187,46 @@ viewTopBar model =
                     |> Separator.toHtml [ class "me-2" ]
                 ]
             , viewSearch model
+            , viewSyncStatus model
             ]
         , viewProgress model
         ]
+
+
+{-| Where syncing stands, at the end of the bar from md up.
+-}
+viewSyncStatus : Model -> Html Msg
+viewSyncStatus model =
+    case model.page of
+        Stars session ->
+            case ( session.account, session.library ) of
+                ( Missing, _ ) ->
+                    text ""
+
+                ( _, Opening ) ->
+                    text ""
+
+                ( _, Open shelf ) ->
+                    let
+                        state =
+                            syncState model shelf
+                    in
+                    div [ class "hidden min-w-0 items-center justify-end gap-1.5 text-xs text-muted-foreground tabular-nums md:flex", attribute "role" "status" ]
+                        [ Icon.view
+                            ("size-3.5! "
+                                ++ (if state.tone == Busy then
+                                        "animate-spin [animation-duration:1.5s]"
+
+                                    else
+                                        ""
+                                   )
+                            )
+                            state.icon
+                        , span [ class "truncate" ] [ text state.label ]
+                        ]
+
+        Invalid _ ->
+            text ""
 
 
 viewSearch : Model -> Html Msg
