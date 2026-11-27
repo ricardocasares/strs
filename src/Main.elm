@@ -2136,7 +2136,8 @@ escapeKey msg =
             )
 
 
-{-| The order of the results, beside the search.
+{-| The order of the results, beside the search. On small screens the trigger shows only the
+order's icon, leaving the room to the search.
 -}
 viewOrder : Model -> Html Msg
 viewOrder model =
@@ -2144,8 +2145,31 @@ viewOrder model =
         |> Select.id "order"
         |> Select.onSelect OrderChosen
         |> Select.value (Just model.order)
-        |> Select.items (List.map (\order -> Select.item order [ text (Filters.orderLabel order) ]) Filters.orders)
-        |> Select.toHtml [ class "w-32 shrink-0 max-md:h-9! md:w-40", attribute "aria-label" "Sort" ]
+        |> Select.group "Sort by"
+            (List.map
+                (\order -> Select.item order [ Icon.view "" (orderIcon order), span [] [ text (Filters.orderLabel order) ] ])
+                Filters.orders
+            )
+        |> Select.toHtml
+            [ class "shrink-0 max-md:h-9! md:w-44 max-md:[&_[data-slot=select-value]_span]:hidden"
+            , attribute "aria-label" ("Sort: " ++ Filters.orderLabel model.order)
+            ]
+
+
+orderIcon : Order -> Icon.Icon
+orderIcon order =
+    case order of
+        Relevance ->
+            Icon.relevance
+
+        RecentlyStarred ->
+            Icon.starred
+
+        MostStars ->
+            Icon.popular
+
+        RecentlyUpdated ->
+            Icon.updated
 
 
 {-| A hairline along the bottom of the bar while stars sync: how far through the pages, when

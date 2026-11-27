@@ -606,5 +606,13 @@
 
 /* The sort select narrows with the screen; its list keeps room for the longest order. */
 #order-popover {
-  min-width: 10rem;
+  min-width: 11rem;
+}
+
+/* There the trigger is just an icon at the screen's edge, so the list opens leftwards from it. */
+@media (width < 48rem) {
+  #order-popover {
+    left: auto !important;
+    right: anchor(right);
+  }
 }
