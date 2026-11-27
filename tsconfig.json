@@ -3,7 +3,7 @@
     "target": "ESNext",
     "module": "ESNext",
     "moduleResolution": "bundler",
-    "types": ["vite/client", "node"],
+    "types": ["vite/client", "bun"],
     "lib": ["ESNext", "DOM"],
     "strict": true,
     "noEmit": true,

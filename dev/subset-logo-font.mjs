@@ -1,4 +1,4 @@
-// Cuts Major Mono Display down to the glyphs of the wordmark, "stRs": npm run font:logo
+// Cuts Major Mono Display down to the glyphs of the wordmark, "stRs": bun run font:logo
 import { readFile, writeFile } from "node:fs/promises";
 import subsetFont from "subset-font";
 

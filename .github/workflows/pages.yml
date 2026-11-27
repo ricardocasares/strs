@@ -22,13 +22,10 @@ jobs:
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
       - uses: actions/checkout@v7
-      - uses: actions/setup-node@v7
-        with:
-          node-version: 24
-          cache: npm
-      - run: npm ci
+      - uses: oven-sh/setup-bun@v2
+      - run: bun install --frozen-lockfile
       # Pages serves the repo under /strs/; the app reads it from the <base> tag.
-      - run: npm run build -- --base=/strs/
+      - run: bun run build --base=/strs/
       - uses: actions/configure-pages@v6
       - uses: actions/upload-pages-artifact@v5
         with:

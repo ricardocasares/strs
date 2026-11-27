@@ -1,5 +1,5 @@
 // Draws the favicon from the R of Major Mono Display, the triangle R of the wordmark:
-// npm run favicon. Browsers don't load web fonts in favicons, so the outline is baked in.
+// bun run favicon. Browsers don't load web fonts in favicons, so the outline is baked in.
 import { readFile, writeFile } from "node:fs/promises";
 import opentype from "opentype.js";
 

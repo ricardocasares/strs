@@ -9,15 +9,15 @@ source into `src/UI/<Name>.elm`, and from then on the code is ours to read and c
 Search the registry with the shadcn CLI. No `components.json` is needed.
 
 ```sh
-npx shadcn@latest search ricardocasares/elmcn
-npx shadcn@latest search ricardocasares/elmcn -q dialog
+bunx shadcn@latest search ricardocasares/elmcn
+bunx shadcn@latest search ricardocasares/elmcn -q dialog
 ```
 
 Each result is an item name such as `button` or `alert-dialog`. To see what an item
 installs and which Elm packages it needs, view it:
 
 ```sh
-npx shadcn@latest view ricardocasares/elmcn/dialog
+bunx shadcn@latest view ricardocasares/elmcn/dialog
 ```
 
 The installed components are the modules in `src/UI/`. Read one to learn its API before
@@ -26,14 +26,14 @@ using it.
 ## Install components
 
 ```sh
-npx shadcn@latest add ricardocasares/elmcn/card ricardocasares/elmcn/input
+bunx shadcn@latest add ricardocasares/elmcn/card ricardocasares/elmcn/input
 ```
 
 - Each item is written to `src/UI/<Name>.elm`, together with the components it uses.
   `alert-dialog` becomes `UI.AlertDialog`.
 - Read the notes the CLI prints after the install. Some items need an Elm package, for
   example `elm install elm/json`, or a script that `src/main.ts` must import.
-- Run `npx shadcn@latest add ... --diff` to compare an installed component with the
+- Run `bunx shadcn@latest add ... --diff` to compare an installed component with the
   registry before overwriting local changes.
 - Do not write a component by hand if the registry has it.
 
@@ -60,8 +60,8 @@ Required content is enforced by the type, so an incomplete builder does not comp
 - `src/main.css` is the one stylesheet: Tailwind and the theme. `index.html` links it,
   so do not import CSS from TypeScript.
 - After changing `src/InteropDefinitions.elm`, regenerate the types with
-  `npm run types`. `npm run dev` and `npm run build` do it for you.
-- `npm run dev` starts Vite.
+  `bun run types`. `bun run dev` and `bun run build` do it for you.
+- `bun run dev` starts Vite on Bun. Use `bun` and `bunx`, not npm or npx.
 
 ## Architecture
 
@@ -84,7 +84,7 @@ anything that needs a token.
 
 ## Developing without spending the rate limit
 
-The unauthenticated limit is 60 requests an hour per IP. `npm run dev:mock` serves
+The unauthenticated limit is 60 requests an hour per IP. `bun run dev:mock` serves
 recorded stars from `dev/fixtures` instead (record them with `dev/record.sh <login>`, which
 uses the authenticated `gh` CLI). `dev/mock-github.ts` documents the knobs at
 `/__github/__control` for simulating rate limits, 429s, new stars and going offline.
@@ -93,8 +93,8 @@ uses the authenticated `gh` CLI). `dev/mock-github.ts` documents the knobs at
 
 The wordmark is the text "stRs" in Major Mono Display (lower case are its thin capitals,
 upper case R is the triangle R). `src/fonts/major-mono-display-logo.woff2` holds only those
-glyphs; regenerate it with `npm run font:logo` if the wordmark changes. The favicon is that
-font's R, drawn into `public/favicon.svg` by `npm run favicon`.
+glyphs; regenerate it with `bun run font:logo` if the wordmark changes. The favicon is that
+font's R, drawn into `public/favicon.svg` by `bun run favicon`.
 
 ## TypeScript
 
