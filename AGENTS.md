@@ -1,50 +1,70 @@
 # AGENTS.md
 
-This is an Elm app styled with [elmcn](https://github.com/ricardocasares/elmcn): shadcn/ui
-components for Elm. Like shadcn/ui, elmcn is not a package. The CLI copies a component's
-source into `src/UI/<Name>.elm`, and from then on the code is ours to read and change.
+stRs makes a GitHub user's stars searchable as you type. It is an Elm app styled with
+[elmcn](https://github.com/ricardocasares/elmcn): shadcn/ui components for Elm. Like
+shadcn/ui, elmcn is not a package. The CLI copies a component's source into
+`src/UI/<Name>.elm`, and from then on the code is ours to read and change.
 
-## Find components
+## Product rules
 
-Search the registry with the shadcn CLI. No `components.json` is needed.
+- It works without a GitHub token. Never fetch anything that needs one, such as star lists.
+- Search runs on the local index only. Never call the API while the user types.
+- Sync incrementally and spend the rate limit carefully. Respect 403 and 429 responses and
+  `Retry-After`, and tell the user without alarm.
+- `/strs/` shows ricardocasares's stars and `/strs/<login>` shows anyone else's. The UI has
+  no user switcher.
+- The query, filters and sort live in the URL, so any view can be shared.
+- It should feel fast and native, on phones as well as desktops. Performance is a feature.
+
+## UI
+
+- Copy elmcn's docs examples (`gh api repos/ricardocasares/elmcn/contents/docs/Examples`):
+  their structure, classes and component defaults. Don't invent styling: no boxed icons and
+  no custom text weights or colours. Menu icons use `text-muted-foreground`.
+- For each piece of state, choose the elmcn component that represents it best.
+- Global notifications are elmcn toasts. Each is one line that never wraps, with a Retry
+  action where retrying makes sense.
+- Prefer skeletons shaped like the final content to spinners, so nothing shifts when data
+  arrives. A control that has sensible defaults shows the defaults instead of a skeleton.
+  While stars sync, a progress bar moves smoothly.
+- Keep copy short and never redundant. Avoid the tells of AI-generated UI.
+- Icons are Phosphor icons, used through `src/Icon.elm`. All text is set in Inter, with
+  ui.shadcn.com's body text settings.
+- When your class must override a component's own class, check in the browser that it does.
+  Add `!` if it doesn't.
+- The top bar sits on a half-width sticky rail so that iOS Safari shows its blur behind the
+  status bar. Keep that structure (see `viewTopBar`).
+
+## Elm
+
+- Design types so that impossible states can't be represented. Follow the `elm-patterns`
+  skill in `.agents/skills/`.
+- Elm's debugger runs in dev and walks the model one stack frame per element. Store large
+  collections as `Dict`s, not `List`s or `Array`s.
+- Call `elm()` in `vite.config.ts` with no options. Its defaults turn the debugger on in dev
+  and keep it out of production.
+
+## elmcn components
+
+Search and inspect the registry with the shadcn CLI. No `components.json` is needed.
 
 ```sh
-bunx shadcn@latest search ricardocasares/elmcn
 bunx shadcn@latest search ricardocasares/elmcn -q dialog
-```
-
-Each result is an item name such as `button` or `alert-dialog`. To see what an item
-installs and which Elm packages it needs, view it:
-
-```sh
 bunx shadcn@latest view ricardocasares/elmcn/dialog
-```
-
-The installed components are the modules in `src/UI/`. Read one to learn its API before
-using it.
-
-## Install components
-
-```sh
 bunx shadcn@latest add ricardocasares/elmcn/card ricardocasares/elmcn/input
 ```
 
-- Each item is written to `src/UI/<Name>.elm`, together with the components it uses.
-  `alert-dialog` becomes `UI.AlertDialog`.
-- Read the notes the CLI prints after the install. Some items need an Elm package, for
-  example `elm install elm/json`, or a script that `src/main.ts` must import.
-- Run `bunx shadcn@latest add ... --diff` to compare an installed component with the
-  registry before overwriting local changes.
-- Do not write a component by hand if the registry has it.
-
-## Use components
-
-Components are builders: `X.new`, then content setters, then variant and size setters,
-then `toHtml`. Break the line after `X.new` and put each `|>` on its own line.
+- `add` writes each item, and the components it uses, to `src/UI/<Name>.elm`. For example,
+  `alert-dialog` becomes `UI.AlertDialog`. Read the notes it prints, because some items need
+  an Elm package or a script that `src/main.ts` must import.
+- Before overwriting a component you changed, run `add ... --diff`.
+- Never write a component by hand if the registry has it. Read an installed module to learn
+  its API.
+- Components are builders: `X.new`, then content setters, then variant and size setters, then
+  `toHtml`. Required content is enforced by the type. Break the line after `X.new` and put
+  each `|>` on its own line:
 
 ```elm
-import UI.Button as Button
-
 Button.new
     |> Button.text "Save"
     |> Button.outline
@@ -52,53 +72,55 @@ Button.new
     |> Button.toHtml [ onClick Save ]
 ```
 
-Required content is enforced by the type, so an incomplete builder does not compile.
+## Architecture
+
+All behaviour lives in Elm. TypeScript (`src/main.ts`, `src/idb.ts`) only wraps browser APIs:
+IndexedDB, localStorage and the `<in-view>` IntersectionObserver element. Don't move logic
+there. When a feature seems to need JavaScript, keep the logic in Elm and expose only the
+browser capability through a typed port.
+
+- `GitHub.elm` covers the two unauthenticated endpoints (`/users/{login}` and
+  `/users/{login}/starred`) and what each response means for the rate limit. The API URL is
+  a constant, so it needs no env var.
+- `Sync.elm` does incremental sync as pure functions. A full sync walks every page and
+  prunes. A delta sync stops at the first star already known. The cursor is saved with every
+  page.
+- `Index.elm` is BM25F with prefix matching. `Tokens.elm` splits words and highlights matches.
+- `Link.elm` keeps the URL's query string in sync with the app. The URL is rewritten with
+  `replaceUrl` once typing pauses, never on each keystroke.
+- `Main.elm` holds the state machine (`Sync`: `Idle | Running | Paused | Stalled`), the
+  rate-limit budget and the views.
 
 ## Project
 
-- `src/Main.elm` is the app, started by `src/main.ts`.
-- `src/main.css` is the one stylesheet: Tailwind and the theme. `index.html` links it,
-  so do not import CSS from TypeScript.
-- After changing `src/InteropDefinitions.elm`, regenerate the types with
-  `bun run types`. `bun run dev` and `bun run build` do it for you.
-- `bun run dev` starts Vite on Bun. Use `bun` and `bunx`, not npm or npx.
-
-## Architecture
-
-All behaviour lives in Elm. TypeScript (`src/main.ts`, `src/idb.ts`) only wraps browser
-APIs: IndexedDB reads and writes, localStorage, and the `<in-view>`
-IntersectionObserver element. Don't move logic there.
-
-- `GitHub.elm`: the two unauthenticated endpoints (`/users/{login}` and
-  `/users/{login}/starred`), and what each response means for the rate limit.
-- `Sync.elm`: incremental sync as pure functions. Full syncs walk every page and prune;
-  deltas stop at the first star already known. The cursor is saved with every page.
-- `Index.elm`: BM25F with prefix matching. `Tokens.elm` splits words and highlights.
-- `Link.elm`: the query, filters and sort in the URL's query string, so views can be shared.
-  The URL is rewritten with `replaceUrl` once typing pauses, never per keystroke.
-- `Main.elm`: the state machine (`Sync`: `Idle | Running | Paused | Stalled`), the
-  rate-limit budget, and the views.
-
-Never call the API while the user types; search runs on the local index only. Never fetch
-anything that needs a token.
+- Use `bun` and `bunx`, never npm, npx or node. `bun run dev` starts Vite.
+- `src/main.ts` starts `src/Main.elm`. `src/main.css` is the only stylesheet, holding
+  Tailwind and the theme. `index.html` links it, so don't import CSS from TypeScript.
+- After you change `src/InteropDefinitions.elm`, run `bun run types`. `dev` and `build`
+  run it for you.
+- `index.html` sets `<base href="%BASE_URL%">` and the app uses relative URLs. Don't set
+  `base` in `vite.config.ts` or pass it as a flag. The Pages workflow builds with
+  `--base=/strs/`.
+- Pushing to `main` deploys the app to ricardocasares.github.io/strs/.
+- Check UI changes in the running app with agent-browser before you call them done.
 
 ## Developing without spending the rate limit
 
-The unauthenticated limit is 60 requests an hour per IP. `bun run dev:mock` serves
-recorded stars from `dev/fixtures` instead (record them with `dev/record.sh <login>`, which
-uses the authenticated `gh` CLI). `dev/mock-github.ts` documents the knobs at
-`/__github/__control` for simulating rate limits, 429s, new stars and going offline.
+Without a token, GitHub allows 60 requests an hour per IP. `bun run dev:mock` serves stars
+recorded in `dev/fixtures` instead. Record more with `dev/record.sh <login>`, which uses
+the authenticated `gh` CLI. `dev/mock-github.ts` documents the settings at
+`/__github/__control`, which simulate rate limits, 429s, new stars and going offline.
 
 ## Logo
 
-The wordmark is the text "stRs" in Major Mono Display (lower case are its thin capitals,
-upper case R is the triangle R). `src/fonts/major-mono-display-logo.woff2` holds only those
-glyphs; regenerate it with `bun run font:logo` if the wordmark changes. The favicon is that
-font's R, drawn into `public/favicon.svg` by `bun run favicon`.
+The wordmark is "stRs" in Major Mono Display. The lowercase letters are its thin capitals,
+and the uppercase R is its triangle R. `src/fonts/major-mono-display-logo.woff2` holds only
+those glyphs. If the wordmark changes, regenerate it with `bun run font:logo`. The favicon
+is that font's R, which `bun run favicon` draws into `public/favicon.svg`.
 
 ## TypeScript
 
-- No type assertions (`as`), including `as const`: narrow with type guards, or type values
-  through annotations.
-- Switches over a union end with `default: x satisfies never`, so a new variant from Elm
-  doesn't type-check until it's handled.
+- Never use type assertions (`as`), including `as const`. Narrow with type guards, or type
+  values through annotations.
+- Every switch over a union ends with `default: x satisfies never`. A new variant from Elm
+  then fails to type-check until it is handled.
