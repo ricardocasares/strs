@@ -45,6 +45,7 @@ const app = Elm.Main.init({
     api: import.meta.env.VITE_GITHUB_API ?? "https://api.github.com",
     base: import.meta.env.BASE_URL,
     now: Date.now(),
+    sidebarOpen: setting("sidebar") === null ? null : setting("sidebar") === "open",
   },
 });
 

@@ -211,7 +211,7 @@ init json url key =
     let
         flags =
             InteropPorts.decodeFlags json
-                |> Result.withDefault { theme = Nothing, systemDark = False, blockedUntil = Nothing, api = "https://api.github.com", base = "/", now = 0 }
+                |> Result.withDefault { theme = Nothing, systemDark = False, blockedUntil = Nothing, api = "https://api.github.com", base = "/", now = 0, sidebarOpen = Nothing }
 
         now =
             Time.millisToPosix flags.now
@@ -235,7 +235,10 @@ init json url key =
                             else
                                 Nothing
                         )
-            , sidebar = Sidebar.init
+            , sidebar =
+                { open = Maybe.withDefault Sidebar.init.open flags.sidebarOpen
+                , openMobile = False
+                }
             , toaster = Toast.init
             , accounts = []
             , browse = Closed
@@ -536,8 +539,27 @@ update msg model =
         GotInterop (Err _) ->
             ( model, Cmd.none )
 
+        -- The panel's state outlives the visit; the mobile sheet always starts closed.
         SidebarChanged sidebar ->
-            ( { model | sidebar = sidebar }, Cmd.none )
+            ( { model | sidebar = sidebar }
+            , if sidebar.open /= model.sidebar.open then
+                InteropPorts.fromElm
+                    (Interop.SaveSetting
+                        { key = "sidebar"
+                        , value =
+                            Just
+                                (if sidebar.open then
+                                    "open"
+
+                                 else
+                                    "collapsed"
+                                )
+                        }
+                    )
+
+              else
+                Cmd.none
+            )
 
         ToastMsg toastMsg ->
             Toast.update ToastMsg toastMsg model.toaster
