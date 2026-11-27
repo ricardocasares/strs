@@ -1962,7 +1962,7 @@ shelfOf model =
 viewFooter : Model -> Html Msg
 viewFooter model =
     Sidebar.menu []
-        [ Sidebar.menuItem [ class "flex items-center gap-1" ]
+        [ Sidebar.menuItem []
             [ case model.page of
                 Stars session ->
                     case ( session.account, session.library ) of
@@ -1977,7 +1977,6 @@ viewFooter model =
 
                 Invalid _ ->
                     span [ class "flex-1" ] []
-            , themeMenu model
             ]
         ]
 
@@ -2038,24 +2037,39 @@ syncButton model session shelf =
         ]
 
 
+{-| shadcn's mode toggle: the icon of the theme in effect, and a menu of the three choices.
+-}
 themeMenu : Model -> Html Msg
 themeMenu model =
     let
         option theme icon name =
-            Select.item theme [ Icon.view "" icon, span [] [ text name ] ]
+            DropdownMenu.radioItem (model.theme == theme) [ onClick (ThemeSelected theme) ] [ Icon.view "" icon, text name ]
+
+        current =
+            if isDark model then
+                Icon.moon
+
+            else
+                Icon.sun
     in
-    Select.new
-        |> Select.id "theme"
-        |> Select.onSelect ThemeSelected
-        |> Select.value (Just model.theme)
-        |> Select.items
+    DropdownMenu.new
+        |> DropdownMenu.id "theme"
+        |> DropdownMenu.trigger
+            (Button.new
+                |> Button.icon (Icon.view "" current)
+                |> Button.label "Theme"
+                |> Button.ghost
+                |> Button.toAttributes
+                |> (++) [ class "size-9 md:size-8", attribute "aria-label" "Theme" ]
+            )
+            [ Icon.view "" current ]
+        |> DropdownMenu.content
             [ option Interop.Light Icon.sun "Light"
             , option Interop.Dark Icon.moon "Dark"
             , option Interop.System Icon.monitor "System"
             ]
-        |> Select.small
-        -- The trigger shows the icon alone, so the sync status keeps the room.
-        |> Select.toHtml [ class "shrink-0 [&_[data-slot=select-value]_span]:hidden", attribute "aria-label" "Theme" ]
+        |> DropdownMenu.alignEnd
+        |> DropdownMenu.toHtml [ class "w-36" ]
 
 
 
@@ -2068,6 +2082,7 @@ viewTopBar model =
         [ div [ class "mx-auto flex h-14 w-full max-w-3xl items-center gap-2 px-2 md:px-4" ]
             [ Sidebar.trigger [ class "size-9 md:size-8" ] model.sidebar SidebarChanged
             , viewSearch model
+            , themeMenu model
             ]
         , viewProgress model
         ]

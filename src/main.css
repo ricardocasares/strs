@@ -603,7 +603,3 @@
   }
 }
 
-/* The theme select's trigger is just an icon; its list is as wide as its labels. */
-#theme-popover {
-  width: 8rem;
-}
