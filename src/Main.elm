@@ -169,7 +169,6 @@ type alias Tallies =
     { languages : List ( String, Int )
     , topics : List ( String, Int )
     , owners : List ( String, Int )
-    , avatars : Dict String String
     }
 
 
@@ -201,9 +200,12 @@ type Browse
     | Browsing String
 
 
+{-| Rows rendered at once. Two screens' worth: the rest stream in before they're scrolled to,
+and every keystroke re-renders only these.
+-}
 pageSize : Int
 pageSize =
-    60
+    30
 
 
 init : Decode.Value -> Url -> Nav.Key -> ( Model, Cmd Msg )
@@ -391,12 +393,6 @@ search model index =
                 { languages = count (inTopic && inOwner) (Filters.valuesOf Filters.Language repo) acc.languages
                 , topics = count (inLanguage && inOwner) repo.topics acc.topics
                 , owners = count (inLanguage && inTopic) [ repo.owner ] acc.owners
-                , avatars =
-                    if inLanguage && inTopic then
-                        Dict.insert repo.owner repo.avatar acc.avatars
-
-                    else
-                        acc.avatars
                 , chosen =
                     if inLanguage && inTopic && inOwner then
                         scoredRepo :: acc.chosen
@@ -409,7 +405,7 @@ search model index =
                 acc
 
         folded =
-            List.foldl tallyRepo { languages = Dict.empty, topics = Dict.empty, owners = Dict.empty, avatars = Dict.empty, chosen = [] } scored
+            List.foldl tallyRepo { languages = Dict.empty, topics = Dict.empty, owners = Dict.empty, chosen = [] } scored
 
         ranked =
             Dict.toList >> List.sortWith (\( a, x ) ( b, y ) -> compareThen (compare y x) (compare a b))
@@ -420,7 +416,6 @@ search model index =
         { languages = ranked folded.languages
         , topics = ranked folded.topics
         , owners = ranked folded.owners
-        , avatars = folded.avatars
         }
     }
 
@@ -1354,25 +1349,28 @@ subscriptions model =
         ]
 
 
-{-| `/` or ⌘K focuses the search, unless a field already has the keyboard.
+{-| `/` or ⌘K focuses the search, unless a field already has the keyboard. Every other key
+fails the decoder, so typing doesn't send the app a message per keystroke.
 -}
 shortcut : Decoder Msg
 shortcut =
     Decode.map4
         (\key meta ctrl tag ->
-            if List.member tag [ "INPUT", "TEXTAREA", "SELECT" ] then
-                Ignored
-
-            else if key == "/" || ((meta || ctrl) && key == "k") then
-                SearchFocused
-
-            else
-                Ignored
+            not (List.member tag [ "INPUT", "TEXTAREA", "SELECT" ])
+                && (key == "/" || ((meta || ctrl) && key == "k"))
         )
         (Decode.field "key" Decode.string)
         (Decode.field "metaKey" Decode.bool)
         (Decode.field "ctrlKey" Decode.bool)
         (Decode.oneOf [ Decode.at [ "target", "tagName" ] Decode.string, Decode.succeed "" ])
+        |> Decode.andThen
+            (\isShortcut ->
+                if isShortcut then
+                    Decode.succeed SearchFocused
+
+                else
+                    Decode.fail "not a shortcut"
+            )
 
 
 
@@ -1801,7 +1799,7 @@ facetEntries model facet wanted tallies =
                     [ Icon.view "" icon, span [] [ text label ] ]
                 ]
     in
-    List.map (facetItem facet wanted tallies.avatars) shown
+    List.map (facetItem facet wanted (\owner -> shelfOf model |> Maybe.andThen (.index >> Index.avatar owner))) shown
         ++ (if hidden > 0 then
                 [ muted [ onClick (MoreToggled facet) ] Icon.caretDown (String.fromInt hidden ++ " more") ]
 
@@ -1832,8 +1830,8 @@ facetIcon facet =
             Icon.users
 
 
-facetItem : Facet -> Set.Set String -> Dict String String -> ( String, Int ) -> Html Msg
-facetItem facet wanted avatars ( value, count ) =
+facetItem : Facet -> Set.Set String -> (String -> Maybe String) -> ( String, Int ) -> Html Msg
+facetItem facet wanted avatarOf ( value, count ) =
     let
         isPicked =
             Set.member value wanted
@@ -1856,7 +1854,7 @@ facetItem facet wanted avatars ( value, count ) =
                     span [ class "flex size-4 shrink-0 items-center justify-center text-xs text-muted-foreground" ] [ text "#" ]
 
                 Filters.Owner ->
-                    case Dict.get value avatars of
+                    case avatarOf value of
                         Just url ->
                             Html.img [ src (Profile.avatar 32 url), alt "", class "size-4 shrink-0 rounded-full bg-sidebar ring-1 ring-sidebar-border", attribute "loading" "lazy" ] []
 

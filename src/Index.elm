@@ -1,7 +1,7 @@
 module Index exposing
     ( Index, empty, fromList
     , upsert, remove
-    , size, get, ids, toList
+    , size, get, ids, toList, avatar
     , score
     )
 
@@ -17,6 +17,7 @@ which is close enough while a sync streams pages in; `fromList` rebuilds exactly
 
 -}
 
+import Array exposing (Array)
 import Dict exposing (Dict)
 import Repo exposing (Repo)
 import Set
@@ -29,6 +30,11 @@ type Index
         , postings : Dict String Posting
         , totals : Fields Float
         , count : Int
+
+        -- The terms in order, for finding the ones a typed word starts with by bisection
+        -- instead of walking them all. Rebuilt once per batch of changes.
+        , vocabulary : Array String
+        , avatars : Dict String String
         }
 
 
@@ -95,6 +101,8 @@ empty =
         , postings = Dict.empty
         , totals = zeroes
         , count = 0
+        , vocabulary = Array.empty
+        , avatars = Dict.empty
         }
 
 
@@ -116,8 +124,9 @@ fromList repos =
             List.length repos
     in
     List.foldl (\( repo, fields ) index -> insert (averages totals count) repo fields index)
-        (Index { entries = Dict.empty, postings = Dict.empty, totals = totals, count = count })
+        (Index { entries = Dict.empty, postings = Dict.empty, totals = totals, count = count, vocabulary = Array.empty, avatars = Dict.empty })
         tokenized
+        |> withVocabulary
 
 
 upsert : List Repo -> Index -> Index
@@ -126,7 +135,7 @@ upsert repos index =
         (\repo acc ->
             let
                 (Index removed) =
-                    remove [ repo.id ] acc
+                    removeOne repo.id acc
 
                 fields =
                     tokenize repo
@@ -144,26 +153,34 @@ upsert repos index =
         )
         index
         repos
+        |> withVocabulary
 
 
 remove : List Int -> Index -> Index
 remove repoIds index =
-    List.foldl
-        (\id (Index data) ->
-            case Dict.get id data.entries of
-                Just entry ->
-                    Index
-                        { entries = Dict.remove id data.entries
-                        , postings = List.foldl (removePosting id) data.postings entry.terms
-                        , totals = subtractFields entry.lengths data.totals
-                        , count = data.count - 1
-                        }
+    List.foldl removeOne index repoIds
+        |> withVocabulary
 
-                Nothing ->
-                    Index data
-        )
-        index
-        repoIds
+
+removeOne : Int -> Index -> Index
+removeOne id (Index data) =
+    case Dict.get id data.entries of
+        Just entry ->
+            Index
+                { data
+                    | entries = Dict.remove id data.entries
+                    , postings = List.foldl (removePosting id) data.postings entry.terms
+                    , totals = subtractFields entry.lengths data.totals
+                    , count = data.count - 1
+                }
+
+        Nothing ->
+            Index data
+
+
+withVocabulary : Index -> Index
+withVocabulary (Index data) =
+    Index { data | vocabulary = Array.fromList (Dict.keys data.postings) }
 
 
 removePosting : Int -> String -> Dict String Posting -> Dict String Posting
@@ -221,6 +238,7 @@ insert average repo fields (Index data) =
                     }
                     data.entries
             , postings = postings
+            , avatars = Dict.insert repo.owner repo.avatar data.avatars
         }
 
 
@@ -326,6 +344,13 @@ ids (Index data) =
     Dict.keys data.entries
 
 
+{-| The avatar of an owner of any starred repo.
+-}
+avatar : String -> Index -> Maybe String
+avatar owner (Index data) =
+    Dict.get owner data.avatars
+
+
 toList : Index -> List Repo
 toList (Index data) =
     Dict.foldr (\_ entry acc -> entry.repo :: acc) [] data.entries
@@ -385,9 +410,9 @@ boost phrase entries id relevance =
             relevance
 
 
-scoreWord : { a | postings : Dict String Posting, count : Int } -> String -> Dict Int Float
+scoreWord : { a | postings : Dict String Posting, vocabulary : Array String, count : Int } -> String -> Dict Int Float
 scoreWord data word =
-    expand word data.postings
+    expand word data
         |> List.foldl
             (\( factor, posting ) acc ->
                 let
@@ -425,26 +450,67 @@ scoreWord data word =
 
 {-| The word itself, and the longer words it starts, weighted down by how much is missing.
 -}
-expand : String -> Dict String Posting -> List ( Float, Posting )
-expand word postings =
+expand : String -> { a | postings : Dict String Posting, vocabulary : Array String } -> List ( Float, Posting )
+expand word { postings, vocabulary } =
     let
         length =
             toFloat (String.length word)
-    in
-    Dict.foldl
-        (\term posting ( found, acc ) ->
-            if found >= maxExpansions || not (String.startsWith word term) then
-                ( found, acc )
 
-            else if term == word then
-                ( found + 1, ( 1, posting ) :: acc )
+        collect index found acc =
+            case Array.get index vocabulary of
+                Just term ->
+                    if found < maxExpansions && String.startsWith word term then
+                        let
+                            weight =
+                                if term == word then
+                                    1
+
+                                else
+                                    prefixWeight * sqrt (length / toFloat (String.length term))
+                        in
+                        case Dict.get term postings of
+                            Just posting ->
+                                collect (index + 1) (found + 1) (( weight, posting ) :: acc)
+
+                            Nothing ->
+                                collect (index + 1) found acc
+
+                    else
+                        acc
+
+                Nothing ->
+                    acc
+    in
+    collect (firstAtLeast word vocabulary) 0 []
+
+
+{-| The position of the first term that sorts at or after the word: where the terms it
+starts begin.
+-}
+firstAtLeast : String -> Array String -> Int
+firstAtLeast word vocabulary =
+    let
+        bisect low high =
+            if low >= high then
+                low
 
             else
-                ( found + 1, ( prefixWeight * sqrt (length / toFloat (String.length term)), posting ) :: acc )
-        )
-        ( 0, [] )
-        postings
-        |> Tuple.second
+                let
+                    middle =
+                        (low + high) // 2
+                in
+                case Array.get middle vocabulary of
+                    Just term ->
+                        if term < word then
+                            bisect (middle + 1) high
+
+                        else
+                            bisect low middle
+
+                    Nothing ->
+                        low
+    in
+    bisect 0 (Array.length vocabulary)
 
 
 intersect : Dict Int Float -> Dict Int Float -> Dict Int Float
