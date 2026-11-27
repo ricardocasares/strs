@@ -1400,7 +1400,13 @@ view model =
             [ Sidebar.new
                 |> Sidebar.state model.sidebar SidebarChanged
                 |> Sidebar.header [ viewLogo model ]
-                |> Sidebar.content (viewFacets model ++ viewFilters model ++ [ viewOrder model ])
+                |> Sidebar.content
+                    (let
+                        filters =
+                            viewFilters model
+                     in
+                     viewFacets model ++ [ viewOrder model, filters.stars, filters.lifecycle, filters.origin ]
+                    )
                 |> Sidebar.footer [ viewAccount model ]
                 |> Sidebar.rail
                 |> Sidebar.page [ class "min-w-0" ]
@@ -1631,7 +1637,7 @@ isSyncing session =
 
 {-| One section, because everything in it narrows the same list: "Clear all" means all of it.
 -}
-viewFilters : Model -> List (Html Msg)
+viewFilters : Model -> { lifecycle : Html Msg, origin : Html Msg, stars : Html Msg }
 viewFilters model =
     let
         filters =
@@ -1643,21 +1649,24 @@ viewFilters model =
                 , Sidebar.groupContent [ class "px-1" ] content
                 ]
     in
-    [ group Icon.archive "Lifecycle"
+    { lifecycle =
+        group Icon.archive "Lifecycle"
         []
         [ segmented "Lifecycle"
             LifecycleChosen
             filters.lifecycle
             [ ( Any, "All" ), ( Only Active, "Active" ), ( Only Archived, "Archived" ) ]
         ]
-    , group Icon.fork "Origin"
+    , origin =
+        group Icon.fork "Origin"
         []
         [ segmented "Origin"
             OriginChosen
             filters.origin
             [ ( Any, "All" ), ( Only Source, "Sources" ), ( Only Fork, "Forks" ) ]
         ]
-    , group Icon.star "Stars"
+    , stars =
+        group Icon.star "Stars"
         [ if Filters.isAnyStars filters.stars then
             span [ class "font-normal text-sidebar-foreground tabular-nums" ] [ text (Filters.starsLabel filters.stars) ]
 
@@ -1679,7 +1688,7 @@ viewFilters model =
                 (List.map (\label -> span [] [ text label ]) [ "0", "10", "100", "1k", "10k", "100k", "∞" ])
             ]
         ]
-    ]
+    }
 
 
 {-| A group label's icon and text.
