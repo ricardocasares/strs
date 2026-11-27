@@ -39,6 +39,7 @@ import UI.InputGroup as InputGroup
 import UI.Item as Item
 import UI.Kbd as Kbd
 import UI.Progress as Progress
+import UI.Select as Select
 import UI.Sidebar as Sidebar
 import UI.Skeleton as Skeleton
 import UI.Slider as Slider
@@ -1429,7 +1430,7 @@ viewAccount model =
                     , Icon.view "ms-auto size-4 text-muted-foreground" Icon.chevronsUpDown
                     ]
                 |> DropdownMenu.content (accountMenu model session)
-                |> DropdownMenu.toHtml [ class "w-(--sidebar-width) max-w-[calc(100vw-2rem)]", attribute "style" "--sidebar-width: 15rem" ]
+                |> DropdownMenu.toHtml [ class "w-60 max-w-[calc(100vw-2rem)]" ]
 
         Invalid _ ->
             Sidebar.menuButton [ Sidebar.large, onClick BrowseOpened ]
@@ -2003,39 +2004,21 @@ syncButton model session shelf =
 themeMenu : Model -> Html Msg
 themeMenu model =
     let
-        icon theme =
-            case theme of
-                Interop.Light ->
-                    Icon.sun
-
-                Interop.Dark ->
-                    Icon.moon
-
-                Interop.System ->
-                    Icon.monitor
-
-        option theme name =
-            DropdownMenu.radioItem (model.theme == theme) [ onClick (ThemeSelected theme) ] [ Icon.view "" (icon theme), text name ]
+        option theme icon name =
+            Select.item theme [ Icon.view "" icon, span [] [ text name ] ]
     in
-    DropdownMenu.new
-        |> DropdownMenu.id "theme"
-        |> DropdownMenu.trigger
-            (Button.new
-                |> Button.icon (Icon.view "" (icon model.theme))
-                |> Button.label "Theme"
-                |> Button.ghost
-                |> Button.toAttributes
-                |> (++) [ attribute "aria-label" "Theme" ]
-            )
-            [ Icon.view "" (icon model.theme) ]
-        |> DropdownMenu.content
-            [ option Interop.Light "Light"
-            , option Interop.Dark "Dark"
-            , option Interop.System "System"
+    Select.new
+        |> Select.id "theme"
+        |> Select.onSelect ThemeSelected
+        |> Select.value (Just model.theme)
+        |> Select.items
+            [ option Interop.Light Icon.sun "Light"
+            , option Interop.Dark Icon.moon "Dark"
+            , option Interop.System Icon.monitor "System"
             ]
-        |> DropdownMenu.top
-        |> DropdownMenu.alignEnd
-        |> DropdownMenu.toHtml [ class "w-36" ]
+        |> Select.small
+        -- The trigger shows the icon alone, so the sync status keeps the room.
+        |> Select.toHtml [ class "shrink-0 [&_[data-slot=select-value]_span]:hidden", attribute "aria-label" "Theme" ]
 
 
 
@@ -2048,7 +2031,6 @@ viewTopBar model =
         [ div [ class "mx-auto flex h-14 w-full max-w-3xl items-center gap-2 px-2 md:px-4" ]
             [ Sidebar.trigger [ class "size-9 md:size-8" ] model.sidebar SidebarChanged
             , viewSearch model
-            , viewOrder model
             ]
         , viewProgress model
         ]
@@ -2071,9 +2053,6 @@ viewSearch model =
 
                 Nothing ->
                     "Search stars"
-
-        filtered =
-            not (String.isEmpty (String.trim model.query)) || not (Filters.isInitial model.filters)
     in
     InputGroup.view [ class "h-9 flex-1 bg-background md:h-8" ]
         [ InputGroup.input
@@ -2092,13 +2071,7 @@ viewSearch model =
         , InputGroup.start [] [ Icon.view "" Icon.search ]
         , InputGroup.end []
             (List.filterMap identity
-                [ case ( shelf, filtered ) of
-                    ( Just s, True ) ->
-                        Just (InputGroup.text [ class "tabular-nums text-xs" ] [ text (Format.thousands s.results.matches) ])
-
-                    _ ->
-                        Nothing
-                , if String.isEmpty model.query then
+                [ if String.isEmpty model.query then
                     Just
                         (Kbd.new
                             |> Kbd.key "/"
@@ -2130,28 +2103,36 @@ escapeKey msg =
             )
 
 
-viewOrder : Model -> Html Msg
-viewOrder model =
-    DropdownMenu.new
-        |> DropdownMenu.id "order"
-        |> DropdownMenu.trigger
-            (Button.new
-                |> Button.icon (Icon.view "" Icon.sort)
-                |> Button.label "Sort"
-                |> Button.ghost
-                |> Button.toAttributes
-                |> (++) [ class "size-9 md:size-8", attribute "aria-label" ("Sort: " ++ Filters.orderLabel model.order) ]
-            )
-            [ Icon.view "" Icon.sort ]
-        |> DropdownMenu.content
-            [ DropdownMenu.group
-                (List.map
-                    (\order -> DropdownMenu.radioItem (model.order == order) [ onClick (OrderChosen order) ] [ text (Filters.orderLabel order) ])
-                    Filters.orders
-                )
-            ]
-        |> DropdownMenu.alignEnd
-        |> DropdownMenu.toHtml [ class "w-44" ]
+{-| Above the results: how many there are, and the order they're in.
+-}
+viewToolbar : Model -> Shelf -> Html Msg
+viewToolbar model shelf =
+    let
+        total =
+            Index.size shelf.index
+
+        count =
+            if shelf.results.matches == total then
+                Format.thousands total ++ " stars"
+
+            else
+                Format.thousands shelf.results.matches ++ " of " ++ Format.thousands total
+    in
+    div [ class toolbarClass ]
+        [ span [ class "text-sm text-muted-foreground tabular-nums" ] [ text count ]
+        , Select.new
+            |> Select.id "order"
+            |> Select.onSelect OrderChosen
+            |> Select.value (Just model.order)
+            |> Select.items (List.map (\order -> Select.item order [ text (Filters.orderLabel order) ]) Filters.orders)
+            |> Select.small
+            |> Select.toHtml [ class "w-40", attribute "aria-label" "Sort" ]
+        ]
+
+
+toolbarClass : String
+toolbarClass =
+    "flex h-11 items-center justify-between gap-2 ps-2.5 md:ps-3"
 
 
 {-| A hairline along the bottom of the bar while stars sync: how far through the pages, when
@@ -2300,6 +2281,14 @@ viewShelf model session shelf =
             |> Empty.toHtml [ class "mt-16" ]
 
     else
+        div []
+            [ viewToolbar model shelf
+            , viewHits model shelf
+            ]
+
+
+viewHits : Model -> Shelf -> Html Msg
+viewHits model shelf =
         Html.Keyed.node "ul"
             [ class "flex flex-col gap-0.5", attribute "aria-label" "Starred repositories" ]
             (List.map
@@ -2439,8 +2428,14 @@ segments words content =
 
 skeletonList : Int -> Html msg
 skeletonList count =
-    Html.ul [ class "flex flex-col gap-0.5", attribute "aria-busy" "true", attribute "aria-label" "Loading stars" ]
-        (List.repeat count skeletonHit)
+    div []
+        [ div [ class toolbarClass ]
+            [ Skeleton.view [ class "h-3.5 w-24" ]
+            , Skeleton.view [ class "h-7 w-40 rounded-lg" ]
+            ]
+        , Html.ul [ class "flex flex-col gap-0.5", attribute "aria-busy" "true", attribute "aria-label" "Loading stars" ]
+            (List.repeat count skeletonHit)
+        ]
 
 
 {-| The same item, with the same paddings, as a real row: content doesn't move when it lands.
