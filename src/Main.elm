@@ -1822,7 +1822,7 @@ facetEntries model facet wanted tallies =
                                 100
 
                                else
-                                8
+                                5
                               )
                             || Set.member value wanted
                     )
@@ -1841,7 +1841,7 @@ facetEntries model facet wanted tallies =
         ++ (if hidden > 0 then
                 [ toggle Icon.caretDown (String.fromInt hidden ++ " more") ]
 
-            else if expanded && List.length listed > 8 then
+            else if expanded && List.length listed > 5 then
                 [ toggle Icon.caretUp "Show less" ]
 
             else
