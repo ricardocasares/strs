@@ -40,7 +40,6 @@ import UI.InputGroup as InputGroup
 import UI.Item as Item
 import UI.Kbd as Kbd
 import UI.Progress as Progress
-import UI.Separator as Separator
 import UI.Sidebar as Sidebar
 import UI.Skeleton as Skeleton
 import UI.Slider as Slider
@@ -2179,19 +2178,29 @@ shelfOf model =
 
 viewTopBar : Model -> Html Msg
 viewTopBar model =
-    Html.header [ class "sticky top-0 z-20 border-b bg-background/85 backdrop-blur-md supports-[backdrop-filter]:bg-background/70" ]
-        -- From md up, three columns: the toggle, the search as wide as the results and centred
-        -- like them, and an empty column as wide as the first to keep it there.
-        [ div [ class "flex h-14 w-full items-center gap-2 px-3 md:grid md:grid-cols-[minmax(min-content,1fr)_minmax(0,46rem)_minmax(0,1fr)] md:px-4" ]
-            [ div [ class "flex items-center gap-2 self-stretch" ]
-                [ Sidebar.trigger [ class "-ms-1 size-9 md:size-8" ] model.sidebar SidebarChanged
-                , Separator.new
-                    |> Separator.vertical
-                    |> Separator.toHtml [ class "me-2" ]
+    -- Safari on iOS paints the status bar with the body's colour when a sticky bar spans the
+    -- viewport's top edge. So the sticky element is half the page wide, inside a composited
+    -- rail, and the header doubles back to full width; its blurred backdrop reaches up behind
+    -- the status bar, which Safari then neither covers nor clips.
+    div [ class "h-14 shrink-0" ]
+        [ div [ class "pointer-events-none absolute inset-y-0 start-0 z-20 w-1/2 will-change-transform" ]
+            [ div [ class "sticky top-0 h-14" ]
+                [ Html.header
+                    [ class "pointer-events-auto relative h-14 w-[200%] border-b"
+                    , class "before:absolute before:inset-x-0 before:-top-24 before:-bottom-px before:-z-10 before:bg-background/85 before:backdrop-blur-md supports-[backdrop-filter]:before:bg-background/70"
+                    ]
+                    -- From md up, three columns: the toggle, the search as wide as the results
+                    -- and centred like them, and an empty column as wide as the first to keep
+                    -- it there.
+                    [ div [ class "flex h-full w-full items-center gap-2 px-3 md:grid md:grid-cols-[minmax(min-content,1fr)_minmax(0,46rem)_minmax(0,1fr)] md:px-4" ]
+                        [ div [ class "flex items-center" ]
+                            [ Sidebar.trigger [ class "-ms-1 size-9 md:size-8" ] model.sidebar SidebarChanged ]
+                        , viewSearch model
+                        ]
+                    , viewProgress model
+                    ]
                 ]
-            , viewSearch model
             ]
-        , viewProgress model
         ]
 
 
