@@ -1,7 +1,7 @@
 module Icon exposing
     ( Icon, view
     , search, close, star, fork, archive, refresh, sun, moon
-    , monitor, chevronsUpDown, caretDown, caretUp, sort, external, userX, searchX
+    , monitor, chevronsUpDown, caretDown, caretUp, sort, userX, searchX
     , clock, hash, code, users, arrowDown, arrowUp
     , synced, pending, warning, fullResync
     )
@@ -79,11 +79,6 @@ chevronsUpDown =
 sort : Icon
 sort =
     Phosphor.arrowsDownUp
-
-
-external : Icon
-external =
-    Phosphor.arrowSquareOut
 
 
 userX : Icon

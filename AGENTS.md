@@ -66,7 +66,7 @@ Required content is enforced by the type, so an incomplete builder does not comp
 ## Architecture
 
 All behaviour lives in Elm. TypeScript (`src/main.ts`, `src/idb.ts`) only wraps browser
-APIs: IndexedDB reads and writes, localStorage, `window.open`, and the `<in-view>`
+APIs: IndexedDB reads and writes, localStorage, and the `<in-view>`
 IntersectionObserver element. Don't move logic there.
 
 - `GitHub.elm`: the two unauthenticated endpoints (`/users/{login}` and

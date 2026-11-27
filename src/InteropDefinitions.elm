@@ -3,8 +3,8 @@ module InteropDefinitions exposing
     , interop, themeToString
     )
 
-{-| The ports. JavaScript only touches browser APIs here: IndexedDB reads and writes,
-localStorage, and opening a tab. What to store, when, and what it means is decided in Elm.
+{-| The ports. JavaScript only touches browser APIs here: IndexedDB reads and writes, and
+localStorage. What to store, when, and what it means is decided in Elm.
 -}
 
 import Json.Encode as Encode
@@ -46,7 +46,6 @@ type FromElm
     = LoadUser String
     | Write (List Operation)
     | SaveSetting { key : String, value : Maybe String }
-    | OpenUrl String
 
 
 type ToElm
@@ -90,7 +89,7 @@ storeToString target =
 fromElm : Encoder FromElm
 fromElm =
     TsEncode.union
-        (\loadUser write saveSetting openUrl value ->
+        (\loadUser write saveSetting value ->
             case value of
                 LoadUser login ->
                     loadUser login
@@ -100,9 +99,6 @@ fromElm =
 
                 SaveSetting setting ->
                     saveSetting setting
-
-                OpenUrl url ->
-                    openUrl url
         )
         |> TsEncode.variantObject "LoadUser" [ TsEncode.required "login" identity TsEncode.string ]
         |> TsEncode.variantObject "Write" [ TsEncode.required "operations" identity (TsEncode.list operation) ]
@@ -110,7 +106,6 @@ fromElm =
             [ TsEncode.required "key" .key TsEncode.string
             , TsEncode.required "value" .value (TsEncode.maybe TsEncode.string)
             ]
-        |> TsEncode.variantObject "OpenUrl" [ TsEncode.required "url" identity TsEncode.string ]
         |> TsEncode.buildUnion
 
 

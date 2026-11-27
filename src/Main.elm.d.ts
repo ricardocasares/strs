@@ -21,7 +21,7 @@ export interface ElmApp {
   };
 }
 
-export type FromElm = { tag : "OpenUrl"; url : string } | { key : string; tag : "SaveSetting"; value : string | null } | { operations : ({ key : JsonValue; store : "accounts" | "repos"; tag : "Delete" } | { store : "accounts" | "repos"; tag : "Put"; value : JsonValue })[]; tag : "Write" } | { login : string; tag : "LoadUser" };
+export type FromElm = { key : string; tag : "SaveSetting"; value : string | null } | { operations : ({ key : JsonValue; store : "accounts" | "repos"; tag : "Delete" } | { store : "accounts" | "repos"; tag : "Put"; value : JsonValue })[]; tag : "Write" } | { login : string; tag : "LoadUser" };
 
 export type ToElm = { dark : boolean; tag : "SystemThemeChanged" } | { account : JsonValue; login : string; repos : JsonValue; tag : "UserLoaded" } | { message : string; tag : "StorageFailed" };
 

@@ -86,9 +86,6 @@ app.ports.interopFromElm.subscribe((fromElm) => {
       }
       return;
 
-    case "OpenUrl":
-      return window.open(fromElm.url, "_blank", "noopener");
-
     // A message Elm can send but this switch doesn't handle fails to type-check here.
     default:
       return fromElm satisfies never;
