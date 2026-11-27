@@ -1,6 +1,6 @@
 module Sync exposing
     ( Cursor(..), Synced, Run
-    , Mode(..), Job, plan, request, progress
+    , Mode(..), Job, plan, request, progress, pages
     , Step(..), Save, Finish(..), advance, unchanged
     , cursorDecoder, encodeCursor, syncedAt
     )
@@ -119,12 +119,20 @@ request job =
 -}
 progress : Job -> Maybe Float
 progress job =
+    pages job
+        |> Maybe.map (\{ done, last } -> toFloat done / toFloat (max 1 last))
+
+
+{-| How many pages are stored, out of how many, once GitHub has said how many there are.
+-}
+pages : Job -> Maybe { done : Int, last : Int }
+pages job =
     case job of
         Full run ->
-            Maybe.map (\last -> toFloat (run.next - 1) / toFloat (max 1 last)) run.last
+            Maybe.map (\last -> { done = run.next - 1, last = last }) run.last
 
         Delta delta ->
-            Maybe.map (\last -> toFloat (delta.page - 1) / toFloat (max 1 last)) delta.last
+            Maybe.map (\last -> { done = delta.page - 1, last = last }) delta.last
 
 
 

@@ -132,7 +132,18 @@ type alias Run =
     { job : Sync.Job
     , trigger : Trigger
     , attempt : Int
+    , pace : Pace
     }
+
+
+{-| How fast pages are coming in, so the progress bar can glide at that speed instead of
+jumping a page at a time. Only pages asked for straight after the previous one arrived are
+timed, so a wait for the rate limit or a retry doesn't count as a slow page.
+-}
+type Pace
+    = Untimed
+    | Asked Time.Posix
+    | Timed { askedAt : Time.Posix, pageMs : Int }
 
 
 {-| Who asked for the sync, which decides what is worth a toast: a first sync and anything
@@ -914,7 +925,7 @@ startSync trigger mode session model =
                                 _ ->
                                     trigger
                     in
-                    fetch session shelf { job = Sync.plan mode model.now shelf.cursor, trigger = actual, attempt = 0 } model
+                    fetch session shelf { job = Sync.plan mode model.now shelf.cursor, trigger = actual, attempt = 0, pace = Untimed } model
                         |> andThen (refreshProfile session)
 
         ( Opening, _ ) ->
@@ -1033,10 +1044,10 @@ retry session model =
         Open shelf ->
             case shelf.sync of
                 Paused run _ ->
-                    fetch session shelf { run | trigger = Manual } model |> andThen (closeToast "sync")
+                    fetch session shelf { run | trigger = Manual, pace = Untimed } model |> andThen (closeToast "sync")
 
                 Stalled run _ ->
-                    fetch session shelf { run | trigger = Manual, attempt = 0 } model |> andThen (closeToast "sync")
+                    fetch session shelf { run | trigger = Manual, attempt = 0, pace = Untimed } model |> andThen (closeToast "sync")
 
                 Idle ->
                     startSync Manual Sync.Refresh session model
@@ -1144,6 +1155,25 @@ handlePage run response session shelf model =
             failed run problem session shelf model
 
 
+{-| The pace once a page has arrived at `now` and the next is asked for straight away.
+-}
+paced : Time.Posix -> Pace -> Pace
+paced now pace =
+    let
+        since askedAt =
+            Time.posixToMillis now - Time.posixToMillis askedAt
+    in
+    case pace of
+        Untimed ->
+            Asked now
+
+        Asked askedAt ->
+            Timed { askedAt = now, pageMs = since askedAt }
+
+        Timed timed ->
+            Timed { askedAt = now, pageMs = since timed.askedAt }
+
+
 {-| Network trouble is retried quietly, a few times, backing off; then the user decides.
 -}
 failed : Run -> GitHub.Problem -> Session -> Shelf -> Model -> ( Model, Cmd Msg )
@@ -1151,7 +1181,7 @@ failed run problem session shelf model =
     if run.attempt < 3 then
         pause session
             shelf
-            { run | attempt = run.attempt + 1 }
+            { run | attempt = run.attempt + 1, pace = Untimed }
             { until = Time.millisToPosix (Time.posixToMillis model.now + 2000 * 2 ^ run.attempt), reason = Backoff }
             model
 
@@ -1184,7 +1214,7 @@ step run next session shelf model =
                 ( saved, cmd ) =
                     store save session shelf model
             in
-            fetch session saved { run | job = job, attempt = 0 } model
+            fetch session saved { run | job = job, attempt = 0, pace = paced model.now run.pace } model
                 |> Tuple.mapSecond (\fetchCmd -> Cmd.batch [ cmd, fetchCmd ])
                 |> Tuple.mapFirst refresh
 
@@ -2379,14 +2409,41 @@ viewProgress model =
     in
     case running of
         Just run ->
-            case Sync.progress run.job of
-                Just fraction ->
-                    Progress.new (max 4 (fraction * 100))
-                        |> Progress.toHtml [ class progressClass, attribute "aria-label" "Syncing stars" ]
+            let
+                -- Once pages have been timed, head for the end of the page being fetched at
+                -- the speed the last one came in, so the bar moves steadily instead of a page
+                -- at a time. Until then, ease to the pages stored.
+                ( percent, motion ) =
+                    case ( Sync.pages run.job, run.pace ) of
+                        ( Just { done, last }, Timed { pageMs } ) ->
+                            ( Just (toFloat (min last (done + 1)) / toFloat (max 1 last) * 100)
+                            , "--page-ms: " ++ String.fromInt (clamp 200 10000 pageMs) ++ "ms; --page-ease: linear"
+                            )
 
-                Nothing ->
-                    Progress.new 30
-                        |> Progress.toHtml [ class (progressClass ++ " progress-indeterminate"), attribute "aria-label" "Syncing stars" ]
+                        ( Just { done, last }, _ ) ->
+                            ( Just (toFloat done / toFloat (max 1 last) * 100), "--page-ms: 500ms" )
+
+                        ( Nothing, _ ) ->
+                            ( Nothing, "--page-ms: 500ms" )
+            in
+            -- One structure for every state, so the bar animates between them rather than being
+            -- replaced. The timing goes on a wrapper as an attribute: the bar sets its own style
+            -- attribute, and Elm's `style` can't set custom properties.
+            div [ class "contents", attribute "style" motion ]
+                [ Progress.new (Maybe.withDefault 30 (Maybe.map (max 4) percent))
+                    |> Progress.toHtml
+                        [ class progressClass
+                        , class "[&_[data-slot=progress-indicator]]:duration-(--page-ms) [&_[data-slot=progress-indicator]]:ease-(--page-ease,var(--ease-out))"
+                        , class
+                            (if percent == Nothing then
+                                "progress-indeterminate"
+
+                             else
+                                ""
+                            )
+                        , attribute "aria-label" "Syncing stars"
+                        ]
+                ]
 
         Nothing ->
             text ""
@@ -2394,7 +2451,7 @@ viewProgress model =
 
 progressClass : String
 progressClass =
-    "absolute inset-x-0 -bottom-px gap-0 [&_[data-slot=progress-track]]:h-0.5 [&_[data-slot=progress-track]]:rounded-none [&_[data-slot=progress-track]]:bg-transparent [&_[data-slot=progress-indicator]]:duration-500"
+    "absolute inset-x-0 -bottom-px gap-0 [&_[data-slot=progress-track]]:h-0.5 [&_[data-slot=progress-track]]:rounded-none [&_[data-slot=progress-track]]:bg-transparent"
 
 
 
