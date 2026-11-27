@@ -1,7 +1,7 @@
 module Index exposing
     ( Index, empty, fromList
     , upsert, remove
-    , size, get, ids, toList, avatar
+    , size, get, ids, toList, avatar, starBounds
     , score
     )
 
@@ -362,6 +362,27 @@ ids (Index data) =
 avatar : String -> Index -> Maybe String
 avatar owner (Index data) =
     Dict.get owner data.avatars
+
+
+{-| The fewest and the most stars of any repo in the index.
+-}
+starBounds : Index -> Maybe ( Int, Int )
+starBounds (Index data) =
+    Dict.foldl
+        (\_ entry bounds ->
+            let
+                stars =
+                    entry.repo.stars
+            in
+            case bounds of
+                Just ( low, high ) ->
+                    Just ( min low stars, max high stars )
+
+                Nothing ->
+                    Just ( stars, stars )
+        )
+        Nothing
+        data.entries
 
 
 toList : Index -> List Repo
