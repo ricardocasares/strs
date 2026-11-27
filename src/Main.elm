@@ -2112,7 +2112,7 @@ escapeKey msg =
 viewOrder : Model -> Html Msg
 viewOrder model =
     Sidebar.group []
-        [ Sidebar.groupLabel [ class "gap-2 text-sm! text-sidebar-foreground!" ] [ Icon.view "" Icon.sort, text "Sort by" ]
+        [ Sidebar.groupLabel [] [ text "Sort by" ]
         , Sidebar.menu []
             (List.map
                 (\order ->
