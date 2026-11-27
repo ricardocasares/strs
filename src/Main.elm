@@ -2073,11 +2073,15 @@ themeSwitch model =
 viewTopBar : Model -> Html Msg
 viewTopBar model =
     Html.header [ class "sticky top-0 z-20 border-b bg-background/85 backdrop-blur-md supports-[backdrop-filter]:bg-background/70" ]
-        [ div [ class "flex h-14 w-full items-center gap-2 px-3 md:px-4" ]
-            [ Sidebar.trigger [ class "-ms-1 size-9 md:size-8" ] model.sidebar SidebarChanged
-            , Separator.new
-                |> Separator.vertical
-                |> Separator.toHtml [ class "me-2" ]
+        -- From md up, three columns: the toggle, the search in the middle of the page, and an
+        -- empty column as wide as the first, so the search stays centred.
+        [ div [ class "flex h-14 w-full items-center gap-2 px-3 md:grid md:grid-cols-[1fr_minmax(0,36rem)_1fr] md:px-4" ]
+            [ div [ class "flex items-center gap-2 self-stretch" ]
+                [ Sidebar.trigger [ class "-ms-1 size-9 md:size-8" ] model.sidebar SidebarChanged
+                , Separator.new
+                    |> Separator.vertical
+                    |> Separator.toHtml [ class "me-2" ]
+                ]
             , viewSearch model
             ]
         , viewProgress model
@@ -2102,7 +2106,7 @@ viewSearch model =
                 Nothing ->
                     "Search stars"
     in
-    InputGroup.view [ class "ms-auto h-9 flex-1 bg-background md:h-8 md:max-w-sm" ]
+    InputGroup.view [ class "h-9 flex-1 bg-background md:h-8" ]
         [ InputGroup.input
             [ id "search"
             , type_ "text"
