@@ -1847,7 +1847,7 @@ viewFilters model =
             [ ( Any, "All" ), ( Only Source, "Sources" ), ( Only Fork, "Forks" ) ]
         ]
     , stars =
-        group Icon.starHalf "Stargazers"
+        group Icon.shootingStar "Stargazers"
         [ if Filters.isAnyStars filters.stars then
             text ""
 
