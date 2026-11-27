@@ -1,4 +1,5 @@
-// A stand-in for api.github.com during development, served by Vite under /__github.
+// A stand-in for api.github.com during development, served by Vite under /__github. The app
+// calls api.github.com; this plugin points the compiled Elm at the mock instead.
 // It replays recorded pages of stars, so working on the app doesn't spend the real
 // 60-requests-an-hour budget, and it can misbehave on purpose:
 //
@@ -55,6 +56,9 @@ export const mockGitHub = (dir: string): Plugin => {
   return {
     name: "mock-github",
     apply: "serve",
+    transform(code, id) {
+      if (id.endsWith(".elm") || id.includes(".elm?")) return code.replaceAll("https://api.github.com", "/__github");
+    },
     configureServer(server) {
       server.middlewares.use("/__github", (req, res) => {
         const url = new URL(req.url ?? "/", "http://localhost");

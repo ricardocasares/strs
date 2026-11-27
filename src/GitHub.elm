@@ -1,6 +1,5 @@
 module GitHub exposing
-    ( Api, api
-    , Response(..), Meta, Quota, Wait(..), Problem(..)
+    ( Response(..), Meta, Quota, Wait(..), Problem(..)
     , profile, starred, perPage
     )
 
@@ -20,19 +19,9 @@ import Time
 import Url
 
 
-type Api
-    = Api String
-
-
-api : String -> Api
-api base =
-    Api
-        (if String.endsWith "/" base then
-            String.dropRight 1 base
-
-         else
-            base
-        )
+base : String
+base =
+    "https://api.github.com"
 
 
 type Response a
@@ -78,8 +67,8 @@ perPage =
     100
 
 
-profile : Api -> Login -> Maybe String -> Task Never (Response (Time.Posix -> Profile))
-profile (Api base) login etag =
+profile : Login -> Maybe String -> Task Never (Response (Time.Posix -> Profile))
+profile login etag =
     get
         { url = base ++ "/users/" ++ Login.toString login
         , accept = "application/vnd.github+json"
@@ -108,8 +97,8 @@ profile (Api base) login etag =
 
 {-| A page of a user's stars, newest first, each with the time it was starred.
 -}
-starred : Api -> Login -> { page : Int, etag : Maybe String } -> Task Never (Response (List Repo))
-starred (Api base) login { page, etag } =
+starred : Login -> { page : Int, etag : Maybe String } -> Task Never (Response (List Repo))
+starred login { page, etag } =
     get
         { url = base ++ "/users/" ++ Login.toString login ++ "/starred?per_page=" ++ String.fromInt perPage ++ "&page=" ++ String.fromInt page
         , accept = "application/vnd.github.star+json"

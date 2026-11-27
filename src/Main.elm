@@ -67,7 +67,6 @@ main =
 
 type alias Model =
     { key : Nav.Key
-    , api : GitHub.Api
     , theme : Theme
     , systemDark : Bool
     , zone : Time.Zone
@@ -209,14 +208,13 @@ init json url key =
     let
         flags =
             InteropPorts.decodeFlags json
-                |> Result.withDefault { theme = Nothing, systemDark = False, blockedUntil = Nothing, api = "https://api.github.com", now = 0, sidebarOpen = Nothing }
+                |> Result.withDefault { theme = Nothing, systemDark = False, blockedUntil = Nothing, now = 0, sidebarOpen = Nothing }
 
         now =
             Time.millisToPosix flags.now
 
         model =
             { key = key
-            , api = GitHub.api flags.api
             , theme = Maybe.withDefault Interop.System flags.theme
             , systemDark = flags.systemDark
             , zone = Time.utc
@@ -972,7 +970,7 @@ refreshProfile session model =
     let
         request etag =
             ( model
-            , GitHub.profile model.api session.login etag
+            , GitHub.profile session.login etag
                 |> Task.andThen (\response -> Task.map (Tuple.pair response) Time.now)
                 |> Task.perform (GotProfile session.login)
             )
@@ -1006,7 +1004,7 @@ fetch session shelf run model =
 
         Nothing ->
             ( setSync session shelf (Running run) model
-            , GitHub.starred model.api session.login (Sync.request run.job)
+            , GitHub.starred session.login (Sync.request run.job)
                 |> Task.andThen (\response -> Task.map (Tuple.pair response) Time.now)
                 |> Task.perform (GotPage session.login run.job)
             )

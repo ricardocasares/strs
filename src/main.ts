@@ -45,7 +45,6 @@ const app = Elm.Main.init({
     theme: theme(setting("theme")),
     systemDark: media.matches,
     blockedUntil: Number.isFinite(blockedUntil) && blockedUntil > 0 ? blockedUntil : null,
-    api: import.meta.env.VITE_GITHUB_API ?? "https://api.github.com",
     now: Date.now(),
     sidebarOpen: setting("sidebar") === null ? null : setting("sidebar") === "open",
   },
