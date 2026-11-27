@@ -5,7 +5,7 @@ import Browser.Dom
 import Browser.Events
 import Browser.Navigation as Nav
 import Dict exposing (Dict)
-import Filters exposing (Choice(..), Facet, Filters, Order(..))
+import Filters exposing (Choice(..), Direction(..), Facet, Filters, Key(..), Sort(..))
 import Format
 import GitHub
 import Html exposing (Html, div, span, text)
@@ -80,7 +80,7 @@ type alias Model =
     , query : String
     , filters : Filters
     , expanded : List Facet
-    , order : Order
+    , sort : Sort
     , limit : Int
     , linkVersion : Int
     , page : Page
@@ -243,7 +243,7 @@ init json url key =
             , query = ""
             , filters = Filters.initial
             , expanded = []
-            , order = Relevance
+            , sort = Relevance
             , limit = pageSize
             , linkVersion = 0
             , page = Invalid ""
@@ -407,7 +407,7 @@ search model index =
             Dict.toList >> List.sortWith (\( a, x ) ( b, y ) -> compareThen (compare y x) (compare a b))
     in
     { matches = List.length folded.chosen
-    , hits = List.sortWith (compareBy model.order) folded.chosen |> List.take model.limit |> List.map Tuple.first
+    , hits = List.sortWith (compareBy model.sort) folded.chosen |> List.take model.limit |> List.map Tuple.first
     , tallies =
         { languages = ranked folded.languages
         , topics = ranked folded.topics
@@ -416,24 +416,51 @@ search model index =
     }
 
 
-compareBy : Order -> ( Repo, Float ) -> ( Repo, Float ) -> Basics.Order
-compareBy order ( a, x ) ( b, y ) =
+compareBy : Sort -> ( Repo, Float ) -> ( Repo, Float ) -> Basics.Order
+compareBy sort ( a, x ) ( b, y ) =
     let
         recent =
             compare (Time.posixToMillis b.starredAt) (Time.posixToMillis a.starredAt)
     in
-    case order of
+    case sort of
         Relevance ->
             compareThen (compare y x) recent
 
-        RecentlyStarred ->
-            recent
+        Sorted key direction ->
+            let
+                ascending =
+                    case key of
+                        StarredAt ->
+                            compare (Time.posixToMillis a.starredAt) (Time.posixToMillis b.starredAt)
 
-        MostStars ->
-            compareThen (compare b.stars a.stars) recent
+                        StarCount ->
+                            compare a.stars b.stars
 
-        RecentlyUpdated ->
-            compareThen (compare (Time.posixToMillis b.pushedAt) (Time.posixToMillis a.pushedAt)) recent
+                        PushedAt ->
+                            compare (Time.posixToMillis a.pushedAt) (Time.posixToMillis b.pushedAt)
+            in
+            compareThen
+                (case direction of
+                    Ascending ->
+                        ascending
+
+                    Descending ->
+                        reverseOrder ascending
+                )
+                recent
+
+
+reverseOrder : Basics.Order -> Basics.Order
+reverseOrder order =
+    case order of
+        LT ->
+            GT
+
+        EQ ->
+            EQ
+
+        GT ->
+            LT
 
 
 compareThen : Basics.Order -> Basics.Order -> Basics.Order
@@ -492,7 +519,7 @@ type Msg
     | Cleared Facet
     | MoreToggled Facet
     | FiltersReset
-    | OrderChosen Order
+    | SortChosen Sort
     | MoreRequested
     | SyncRequested Sync.Mode
     | RetryRequested
@@ -524,14 +551,14 @@ update msg model =
 
 shared : Model -> Link.Shared
 shared model =
-    { query = model.query, filters = model.filters, order = model.order }
+    { query = model.query, filters = model.filters, sort = model.sort }
 
 
 {-| Shows what a link carries.
 -}
 share : Link.Shared -> Model -> Model
 share link model =
-    refresh { model | query = link.query, filters = link.filters, order = link.order, limit = pageSize }
+    refresh { model | query = link.query, filters = link.filters, sort = link.sort, limit = pageSize }
 
 
 handle : Msg -> Model -> ( Model, Cmd Msg )
@@ -654,8 +681,8 @@ handle msg model =
         FiltersReset ->
             setFilters (\_ -> Filters.initial) model
 
-        OrderChosen order ->
-            ( refresh { model | order = order, limit = pageSize }, Cmd.none )
+        SortChosen sort ->
+            ( refresh { model | sort = sort, limit = pageSize }, Cmd.none )
 
         MoreRequested ->
             ( refresh { model | limit = model.limit + pageSize }, Cmd.none )
@@ -2193,27 +2220,63 @@ escapeKey msg =
 -}
 viewOrder : Model -> Html Msg
 viewOrder model =
+    let
+        option attrs isActive children =
+            Sidebar.menuItem []
+                [ Sidebar.menuButton
+                    (attribute "aria-pressed" (boolString isActive)
+                        :: (if isActive then
+                                [ Sidebar.active ]
+
+                            else
+                                []
+                           )
+                        ++ attrs
+                    )
+                    children
+                ]
+
+        byKey key =
+            case model.sort of
+                Sorted current direction ->
+                    if current == key then
+                        -- Picking the current order again turns it around.
+                        option [ onClick (SortChosen (Sorted key (Filters.flip direction))), attribute "aria-label" (Filters.keyLabel key ++ ", " ++ directionName direction) ]
+                            True
+                            [ span [] [ text (Filters.keyLabel key) ]
+                            , Icon.view "ms-auto"
+                                (case direction of
+                                    Descending ->
+                                        Icon.arrowDown
+
+                                    Ascending ->
+                                        Icon.arrowUp
+                                )
+                            ]
+
+                    else
+                        option [ onClick (SortChosen (Sorted key Descending)) ] False [ span [] [ text (Filters.keyLabel key) ] ]
+
+                Relevance ->
+                    option [ onClick (SortChosen (Sorted key Descending)) ] False [ span [] [ text (Filters.keyLabel key) ] ]
+    in
     Sidebar.group []
         [ Sidebar.groupLabel [] [ sectionTitle Icon.sort "Sort by" ]
         , Sidebar.menu []
-            (List.map
-                (\order ->
-                    Sidebar.menuItem []
-                        [ Sidebar.menuButton
-                            ([ onClick (OrderChosen order), attribute "aria-pressed" (boolString (model.order == order)) ]
-                                ++ (if model.order == order then
-                                        [ Sidebar.active ]
-
-                                    else
-                                        []
-                                   )
-                            )
-                            [ span [] [ text (Filters.orderLabel order) ] ]
-                        ]
-                )
-                Filters.orders
+            (option [ onClick (SortChosen Relevance) ] (model.sort == Relevance) [ span [] [ text "Best match" ] ]
+                :: List.map byKey Filters.keys
             )
         ]
+
+
+directionName : Direction -> String
+directionName direction =
+    case direction of
+        Descending ->
+            "descending"
+
+        Ascending ->
+            "ascending"
 
 
 {-| A hairline along the bottom of the bar while stars sync: how far through the pages, when
@@ -2360,7 +2423,7 @@ viewHits model shelf =
             (List.map
                 (\repo ->
                     ( String.fromInt repo.id
-                    , Html.Lazy.lazy5 viewHit (nowBucket model) model.order model.query (Language.color (Maybe.withDefault "" repo.language)) repo
+                    , Html.Lazy.lazy5 viewHit (nowBucket model) model.sort model.query (Language.color (Maybe.withDefault "" repo.language)) repo
                     )
                 )
                 shelf.results.hits
@@ -2386,15 +2449,15 @@ nowBucket model =
     Time.posixToMillis model.now // 60000 * 60000
 
 
-viewHit : Int -> Order -> String -> String -> Repo -> Html Msg
-viewHit now order query color repo =
+viewHit : Int -> Sort -> String -> String -> Repo -> Html Msg
+viewHit now sort query color repo =
     let
         words =
             Tokens.words query
 
         dateLabel =
-            case order of
-                RecentlyStarred ->
+            case sort of
+                Sorted StarredAt _ ->
                     "Starred " ++ Format.ago (Time.millisToPosix now) repo.starredAt ++ " ago"
 
                 _ ->

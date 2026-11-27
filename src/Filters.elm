@@ -2,7 +2,7 @@ module Filters exposing
     ( Filters, Choice(..), initial, isInitial, matches
     , Facet(..), facets, facetLabel, picked, pick, clear, valuesOf, hasPicks
     , Stars, starsFromSlider, starsToSlider, starsLabel, tierCount, isAnyStars, starsToString, starsFromString
-    , Order(..), orders, orderLabel
+    , Sort(..), Key(..), Direction(..), keys, keyLabel, flip
     )
 
 {-| What narrows and orders the list, apart from the query.
@@ -328,32 +328,68 @@ starsLabel (Stars low high) =
 
 
 
--- ORDER
+-- SORT
 
 
-type Order
+{-| Best match first, or by an attribute in either direction. Relevance has no direction:
+least relevant first is never what anyone wants.
+-}
+type Sort
     = Relevance
-    | RecentlyStarred
-    | MostStars
-    | RecentlyUpdated
+    | Sorted Key Direction
 
 
-orders : List Order
-orders =
-    [ Relevance, RecentlyStarred, MostStars, RecentlyUpdated ]
+type Key
+    = StarredAt
+    | StarCount
+    | PushedAt
 
 
-orderLabel : Order -> String
-orderLabel order =
-    case order of
-        Relevance ->
-            "Best match"
+type Direction
+    = Descending
+    | Ascending
 
-        RecentlyStarred ->
-            "Recently starred"
 
-        MostStars ->
-            "Most stars"
+{-| Every key, in the order the sidebar offers them.
+-}
+keys : List Key
+keys =
+    let
+        next list =
+            case list of
+                [] ->
+                    next [ StarredAt ]
 
-        RecentlyUpdated ->
-            "Recently updated"
+                StarredAt :: _ ->
+                    next (StarCount :: list)
+
+                StarCount :: _ ->
+                    next (PushedAt :: list)
+
+                PushedAt :: _ ->
+                    list
+    in
+    List.reverse (next [])
+
+
+keyLabel : Key -> String
+keyLabel key =
+    case key of
+        StarredAt ->
+            "Date starred"
+
+        StarCount ->
+            "Stars"
+
+        PushedAt ->
+            "Last updated"
+
+
+flip : Direction -> Direction
+flip direction =
+    case direction of
+        Descending ->
+            Ascending
+
+        Ascending ->
+            Descending
