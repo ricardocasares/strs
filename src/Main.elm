@@ -1578,18 +1578,18 @@ viewFilters model =
             model.filters
     in
     [ Sidebar.group []
-        [ Sidebar.groupLabel [ class "justify-between pe-0 text-sm! text-sidebar-foreground!" ]
+        [ Sidebar.groupLabel [ class "justify-between pe-1 text-sm! text-sidebar-foreground!" ]
             [ text "Filters"
             , if Filters.isInitial filters then
                 text ""
 
               else
-                Button.new
-                    |> Button.text "Clear all"
-                    |> Button.endIcon (Icon.view "" Icon.close)
-                    |> Button.ghost
-                    |> Button.extraSmall
-                    |> Button.toHtml [ onClick FiltersReset, class "-me-1 text-sidebar-foreground" ]
+                Html.button
+                    ([ type_ "button", onClick FiltersReset ]
+                        ++ Badge.toAttributes (Badge.new |> Badge.text "Clear all")
+                        ++ [ class "cursor-pointer pe-1.5 hover:bg-primary/85" ]
+                    )
+                    [ text "Clear all", Icon.view "" Icon.close ]
             ]
         , Sidebar.groupContent [ class "flex flex-col gap-4 px-1 pt-1" ]
             [ filterField "Lifecycle"
