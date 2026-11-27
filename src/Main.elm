@@ -1455,7 +1455,7 @@ viewIdentity session =
         Known profile ->
             layout
                 (userAvatar "bg-sidebar" profile.avatar login [ class "size-8" ])
-                (span [ class "truncate text-sm font-medium" ] [ text (Profile.displayName profile) ])
+                (span [ class "truncate text-sm font-semibold" ] [ text (Profile.displayName profile) ])
 
         Unknown ->
             if isWaiting session then
@@ -1668,10 +1668,10 @@ viewFacet model tallies facet =
     in
     Sidebar.menuItem []
         [ Sidebar.collapsible []
-            (Sidebar.menuTrigger []
-                [ Icon.view "" (facetIcon facet)
+            (Sidebar.menuTrigger [ class (navClass ++ " group-open/collapsible:text-sidebar-foreground") ]
+                [ Icon.bold "" (facetIcon facet)
                 , span [ class "flex-1 truncate" ] [ text (Filters.facetLabel facet) ]
-                , Icon.view "text-muted-foreground transition-transform duration-200 group-open/collapsible:rotate-90" Icon.caretRight
+                , Icon.bold "size-3.5! transition-transform duration-200 group-open/collapsible:rotate-90" Icon.caretRight
                 ]
             )
             [ Sidebar.menuSub [ class "mt-1" ]
@@ -1743,8 +1743,8 @@ facetEntries model facet wanted tallies =
 
         muted attrs icon label =
             Sidebar.menuSubItem []
-                [ Sidebar.menuSubButton (class "text-muted-foreground [&>svg]:text-muted-foreground!" :: attrs)
-                    [ Icon.view "" icon, span [] [ text label ] ]
+                [ Sidebar.menuSubButton (class (navClass ++ " [&>svg]:text-current!") :: attrs)
+                    [ Icon.bold "" icon, span [] [ text label ] ]
                 ]
     in
     List.map (facetItem facet wanted tallies.avatars) shown
@@ -1786,7 +1786,7 @@ facetItem facet wanted avatars ( value, count ) =
     in
     Sidebar.menuSubItem []
         [ Sidebar.menuSubButton
-            ([ onClick (Picked facet value), attribute "aria-pressed" (boolString isPicked), class "w-full" ]
+            ([ onClick (Picked facet value), attribute "aria-pressed" (boolString isPicked), class ("w-full " ++ navClass) ]
                 ++ (if isPicked then
                         [ Sidebar.active ]
 
@@ -1830,6 +1830,13 @@ boolString b =
 
     else
         "false"
+
+
+{-| Sidebar entries: semibold and muted, brightening on hover and when picked or open.
+-}
+navClass : String
+navClass =
+    "font-semibold text-sidebar-foreground/65 hover:text-sidebar-foreground data-active:text-sidebar-foreground"
 
 
 {-| A first sync that hasn't brought any stars in yet.
@@ -1935,8 +1942,8 @@ syncButton model session shelf =
                     , SyncRequested Sync.Refresh
                     )
     in
-    Sidebar.menuButton [ onClick msg, class "flex-1 text-muted-foreground", attribute "aria-busy" (boolString spinning) ]
-        [ Icon.view
+    Sidebar.menuButton [ onClick msg, class ("flex-1 " ++ navClass), attribute "aria-busy" (boolString spinning) ]
+        [ Icon.bold
             (if spinning then
                 "animate-spin [animation-duration:1.5s]"
 
@@ -1975,7 +1982,7 @@ themeMenu model =
                 |> Button.toAttributes
                 |> (++) [ attribute "aria-label" "Theme" ]
             )
-            [ Icon.view "" (icon model.theme) ]
+            [ Icon.bold "" (icon model.theme) ]
         |> DropdownMenu.content
             [ option Interop.Light "Light"
             , option Interop.Dark "Dark"
