@@ -32,9 +32,6 @@ export const loadUser = async (login: string): Promise<{ repos: JsonValue; accou
   return { repos, account: account ?? null };
 };
 
-export const loadAccounts = async (): Promise<JsonValue> =>
-  request((await connection).transaction("accounts").objectStore("accounts").getAll());
-
 // Keys are what Elm encodes for them: a login, or a login and a repo id.
 const isKey = (value: JsonValue): value is string | number | (string | number)[] =>
   typeof value === "string" ||

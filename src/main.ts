@@ -74,12 +74,6 @@ app.ports.interopFromElm.subscribe((fromElm) => {
         )
         .catch(fail);
 
-    case "LoadAccounts":
-      return idb
-        .loadAccounts()
-        .then((accounts) => app.ports.interopToElm.send({ tag: "AccountsLoaded", accounts }))
-        .catch(fail);
-
     case "Write":
       return idb.write(fromElm.operations).catch(fail);
 

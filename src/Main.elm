@@ -74,7 +74,6 @@ type alias Model =
     , blockedUntil : Maybe Time.Posix
     , sidebar : Sidebar.State
     , toaster : Toast.Toaster Msg
-    , accounts : List Summary
     , query : String
     , filters : Filters
     , expanded : List Facet
@@ -185,16 +184,6 @@ tally facet tallies =
             tallies.owners
 
 
-{-| A user whose stars are saved in this browser.
--}
-type alias Summary =
-    { login : String
-    , profile : Maybe Profile
-    , total : Int
-    , visitedAt : Time.Posix
-    }
-
-
 {-| Rows rendered at once. Two screens' worth: the rest stream in before they're scrolled to,
 and every keystroke re-renders only these.
 -}
@@ -235,7 +224,6 @@ init json url key =
                 , openMobile = False
                 }
             , toaster = Toast.init
-            , accounts = []
             , query = ""
             , filters = Filters.initial
             , expanded = []
@@ -251,7 +239,6 @@ init json url key =
     ( share (Link.parse url) routed
     , Cmd.batch
         [ cmd
-        , InteropPorts.fromElm Interop.LoadAccounts
         , Task.perform GotZone Time.here
         ]
     )
@@ -528,7 +515,6 @@ type Msg
     | GotProfile Login ( GitHub.Response (Time.Posix -> Profile), Time.Posix )
     | Resumed Login Time.Posix
     | VisibilityChanged Browser.Events.Visibility
-    | UserChosen Login
     | ProfileOpened String
 
 
@@ -709,9 +695,6 @@ handle msg model =
         VisibilityChanged Browser.Events.Hidden ->
             ( model, Cmd.none )
 
-        UserChosen login ->
-            ( model, Nav.pushUrl model.key (Login.toString login) )
-
         ProfileOpened url ->
             ( model, InteropPorts.fromElm (Interop.OpenUrl url) )
 
@@ -741,9 +724,6 @@ fromJs message model =
     case message of
         Interop.SystemThemeChanged dark ->
             ( { model | systemDark = dark }, Cmd.none )
-
-        Interop.AccountsLoaded json ->
-            ( { model | accounts = decodeAccounts json }, Cmd.none )
 
         Interop.UserLoaded loaded ->
             case model.page of
@@ -814,40 +794,20 @@ storedRepo =
         (Decode.field "seen" (Decode.map Time.millisToPosix Decode.int))
 
 
+{-| What the browser keeps about a user besides their stars: their profile, and where syncing
+them stands.
+-}
 type alias Stored =
     { profile : Maybe Profile
     , cursor : Sync.Cursor
-    , total : Int
-    , visitedAt : Time.Posix
     }
 
 
 accountDecoder : Decoder Stored
 accountDecoder =
-    Decode.map4 Stored
+    Decode.map2 Stored
         (Decode.field "profile" (Decode.nullable Profile.storedDecoder))
         (Decode.field "cursor" Sync.cursorDecoder)
-        (Decode.field "total" Decode.int)
-        (Decode.field "visitedAt" (Decode.map Time.millisToPosix Decode.int))
-
-
-decodeAccounts : Encode.Value -> List Summary
-decodeAccounts json =
-    Decode.decodeValue
-        (Decode.list
-            (Decode.map2 (\login stored -> { login = login, profile = stored.profile, total = stored.total, visitedAt = stored.visitedAt })
-                (Decode.field "login" Decode.string)
-                accountDecoder
-            )
-        )
-        json
-        |> Result.withDefault []
-        |> sortAccounts
-
-
-sortAccounts : List Summary -> List Summary
-sortAccounts =
-    List.sortBy (.visitedAt >> Time.posixToMillis >> negate)
 
 
 toast : Toast.Toast Toast.Ready Msg -> Model -> ( Model, Cmd Msg )
@@ -1278,7 +1238,7 @@ step run next session shelf model =
                             else
                                 Nothing
             in
-            ( refresh (setSync session pruned Idle model), Cmd.batch [ cmd, pruneCmd, InteropPorts.fromElm Interop.LoadAccounts ] )
+            ( refresh (setSync session pruned Idle model), Cmd.batch [ cmd, pruneCmd ] )
                 |> andThen
                     (case report of
                         Just item ->
@@ -1367,7 +1327,6 @@ gotProfile response session model =
                     ( setSession next model
                     , InteropPorts.fromElm (Interop.Write [ Interop.Put Interop.Accounts (encodeAccount account shelf model) ])
                     )
-                        |> andThen (\m -> ( m, InteropPorts.fromElm Interop.LoadAccounts ))
 
                 Opening ->
                     ( setSession next model, Cmd.none )
@@ -1401,8 +1360,6 @@ encodeAccount account shelf model =
                             Encode.null
                   )
                 , ( "cursor", Sync.encodeCursor shelf.cursor )
-                , ( "total", Encode.int (Index.size shelf.index) )
-                , ( "visitedAt", Encode.int (Time.posixToMillis model.now) )
                 ]
 
         Invalid _ ->
@@ -1610,7 +1567,7 @@ tile classes login avatar =
         ]
 
 
-{-| Three sections: whose stars to look at, these stars, and the theme.
+{-| Two sections: these stars, and the theme.
 -}
 accountMenu : Model -> Session -> List (DropdownMenu.Item Msg)
 accountMenu model session =
@@ -1620,20 +1577,6 @@ accountMenu model session =
 
         action attrs icon label =
             DropdownMenu.item attrs [ Icon.view "" icon, text label ]
-
-        users =
-            List.map
-                (\summary ->
-                    DropdownMenu.item
-                        [ onClick (UserChosen (Maybe.withDefault session.login (Login.fromString summary.login)))
-                        , attribute "aria-current" (boolString (summary.login == current))
-                        ]
-                        [ tile "size-5 rounded-full" summary.login (Maybe.map .avatar summary.profile)
-                        , span [ class "truncate" ] [ text summary.login ]
-                        , DropdownMenu.shortcut [ text (Format.compact summary.total) ]
-                        ]
-                )
-                (List.take 6 model.accounts)
 
         sync =
             case ( session.account, session.library ) of
@@ -1654,24 +1597,15 @@ accountMenu model session =
                 ( _, Opening ) ->
                     []
     in
-    (if List.isEmpty users then
-        []
-
-     else
-        [ DropdownMenu.label [ text "Users" ]
-        , DropdownMenu.group users
-        , DropdownMenu.separator
-        ]
-    )
-        ++ [ DropdownMenu.label [ text "Stars" ]
-           , DropdownMenu.group
-                (action [ onClick (ProfileOpened ("https://github.com/" ++ current ++ "?tab=stars")) ] Icon.external "Open on GitHub"
-                    :: sync
-                )
-           , DropdownMenu.separator
-           , DropdownMenu.label [ text "Theme" ]
-           , DropdownMenu.label [ div [ class "pb-1" ] [ themeSwitch model ] ]
-           ]
+    [ DropdownMenu.label [ text "Stars" ]
+    , DropdownMenu.group
+        (action [ onClick (ProfileOpened ("https://github.com/" ++ current ++ "?tab=stars")) ] Icon.external "Open on GitHub"
+            :: sync
+        )
+    , DropdownMenu.separator
+    , DropdownMenu.label [ text "Theme" ]
+    , DropdownMenu.label [ div [ class "pb-1" ] [ themeSwitch model ] ]
+    ]
 
 
 {-| Syncing is held up for longer than a skeleton should pulse.

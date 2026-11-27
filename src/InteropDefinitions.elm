@@ -44,7 +44,6 @@ type Operation
 
 type FromElm
     = LoadUser String
-    | LoadAccounts
     | Write (List Operation)
     | SaveSetting { key : String, value : Maybe String }
     | OpenUrl String
@@ -53,7 +52,6 @@ type FromElm
 type ToElm
     = SystemThemeChanged Bool
     | UserLoaded { login : String, repos : Encode.Value, account : Encode.Value }
-    | AccountsLoaded Encode.Value
     | StorageFailed String
 
 
@@ -92,13 +90,10 @@ storeToString target =
 fromElm : Encoder FromElm
 fromElm =
     TsEncode.union
-        (\loadUser loadAccounts write saveSetting openUrl value ->
+        (\loadUser write saveSetting openUrl value ->
             case value of
                 LoadUser login ->
                     loadUser login
-
-                LoadAccounts ->
-                    loadAccounts
 
                 Write operations ->
                     write operations
@@ -110,7 +105,6 @@ fromElm =
                     openUrl url
         )
         |> TsEncode.variantObject "LoadUser" [ TsEncode.required "login" identity TsEncode.string ]
-        |> TsEncode.variantLiteral (Encode.object [ ( "tag", Encode.string "LoadAccounts" ) ])
         |> TsEncode.variantObject "Write" [ TsEncode.required "operations" identity (TsEncode.list operation) ]
         |> TsEncode.variantObject "SaveSetting"
             [ TsEncode.required "key" .key TsEncode.string
@@ -168,7 +162,6 @@ toElm =
                 (TsDecode.field "repos" TsDecode.value)
                 (TsDecode.field "account" TsDecode.value)
           )
-        , ( "AccountsLoaded", TsDecode.map AccountsLoaded (TsDecode.field "accounts" TsDecode.value) )
         , ( "StorageFailed", TsDecode.map StorageFailed (TsDecode.field "message" TsDecode.string) )
         ]
 

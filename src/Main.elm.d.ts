@@ -21,9 +21,9 @@ export interface ElmApp {
   };
 }
 
-export type FromElm = { tag : "OpenUrl"; url : string } | { key : string; tag : "SaveSetting"; value : string | null } | { operations : ({ key : JsonValue; store : "accounts" | "repos"; tag : "Delete" } | { store : "accounts" | "repos"; tag : "Put"; value : JsonValue })[]; tag : "Write" } | {"tag":"LoadAccounts"} | { login : string; tag : "LoadUser" };
+export type FromElm = { tag : "OpenUrl"; url : string } | { key : string; tag : "SaveSetting"; value : string | null } | { operations : ({ key : JsonValue; store : "accounts" | "repos"; tag : "Delete" } | { store : "accounts" | "repos"; tag : "Put"; value : JsonValue })[]; tag : "Write" } | { login : string; tag : "LoadUser" };
 
-export type ToElm = { dark : boolean; tag : "SystemThemeChanged" } | { account : JsonValue; login : string; repos : JsonValue; tag : "UserLoaded" } | { accounts : JsonValue; tag : "AccountsLoaded" } | { message : string; tag : "StorageFailed" };
+export type ToElm = { dark : boolean; tag : "SystemThemeChanged" } | { account : JsonValue; login : string; repos : JsonValue; tag : "UserLoaded" } | { message : string; tag : "StorageFailed" };
 
 export type Flags = { blockedUntil : number | null; now : number; sidebarOpen : boolean | null; systemDark : boolean; theme : ("light" | "dark" | "system") | null };
 
