@@ -1632,7 +1632,7 @@ viewFilters model =
     in
     [ Sidebar.group []
         [ Sidebar.groupLabel [ class "justify-between pe-1 text-sm! text-sidebar-foreground!" ]
-            [ text "Filters"
+            [ span [ class "flex items-center gap-2" ] [ Icon.view "" Icon.funnel, text "Filters" ]
             , if Filters.isInitial filters then
                 text ""
 
@@ -2139,7 +2139,7 @@ escapeKey msg =
 viewOrder : Model -> Html Msg
 viewOrder model =
     Sidebar.group []
-        [ Sidebar.groupLabel [ class "text-sm! text-sidebar-foreground!" ] [ text "Sort by" ]
+        [ Sidebar.groupLabel [ class "gap-2 text-sm! text-sidebar-foreground!" ] [ Icon.view "" Icon.sort, text "Sort by" ]
         , Sidebar.menu []
             (List.map
                 (\order ->
@@ -2153,28 +2153,12 @@ viewOrder model =
                                         []
                                    )
                             )
-                            [ Icon.view "" (orderIcon order), span [] [ text (Filters.orderLabel order) ] ]
+                            [ span [] [ text (Filters.orderLabel order) ] ]
                         ]
                 )
                 Filters.orders
             )
         ]
-
-
-orderIcon : Order -> Icon.Icon
-orderIcon order =
-    case order of
-        Relevance ->
-            Icon.relevance
-
-        RecentlyStarred ->
-            Icon.starred
-
-        MostStars ->
-            Icon.popular
-
-        RecentlyUpdated ->
-            Icon.updated
 
 
 {-| A hairline along the bottom of the bar while stars sync: how far through the pages, when

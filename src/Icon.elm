@@ -3,7 +3,7 @@ module Icon exposing
     , search, close, star, fork, archive, refresh, sun, moon, monitor
     , chevronsUpDown, caretRight, caretDown, caretUp, sort, external, userSearch, userX, searchX, reset, clock
     , hash, code, users
-    , relevance, starred, popular, updated
+    , funnel
     )
 
 {-| The app's Phosphor icons, named for what they mean here.
@@ -145,21 +145,7 @@ users =
 
 
 
-relevance : Icon
-relevance =
-    Phosphor.sparkle
 
-
-starred : Icon
-starred =
-    Phosphor.calendarStar
-
-
-popular : Icon
-popular =
-    Phosphor.trendUp
-
-
-updated : Icon
-updated =
-    Phosphor.gitCommit
+funnel : Icon
+funnel =
+    Phosphor.funnel
