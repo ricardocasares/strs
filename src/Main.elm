@@ -44,6 +44,7 @@ import UI.Separator as Separator
 import UI.Sidebar as Sidebar
 import UI.Skeleton as Skeleton
 import UI.Slider as Slider
+import UI.Spinner as Spinner
 import UI.Toast as Toast
 import UI.ToggleGroup as ToggleGroup
 import Url exposing (Url)
@@ -1480,7 +1481,7 @@ viewAccount model =
                 |> DropdownMenu.content (accountMenu model session)
                 |> DropdownMenu.right
                 |> DropdownMenu.alignEnd
-                |> DropdownMenu.toHtml [ class "w-64 max-w-[calc(100vw-2rem)] rounded-lg" ]
+                |> DropdownMenu.toHtml [ class "w-56 max-w-[calc(100vw-2rem)] rounded-lg" ]
 
         Invalid _ ->
             text ""
@@ -1574,8 +1575,8 @@ tile classes login avatar =
         ]
 
 
-{-| Whose stars these are and where syncing them stands, then a row each for syncing and the
-theme. Where syncing stands is a line of text, never a button.
+{-| Whose stars these are and where syncing them stands, then syncing, then the theme. Where
+syncing stands is a line of text, never a button.
 -}
 accountMenu : Model -> Session -> List (DropdownMenu.Item Msg)
 accountMenu model session =
@@ -1610,72 +1611,56 @@ accountMenu model session =
                             syncState model open
                     in
                     span [ class "flex min-w-0 items-center gap-1.5 text-xs text-muted-foreground tabular-nums", attribute "role" "status" ]
-                        [ Icon.view
-                            ("size-3.5! "
-                                ++ (if state.tone == Busy then
-                                        "animate-spin [animation-duration:1.5s]"
+                        [ if state.tone == Busy then
+                            Spinner.view [ class "size-3 border-[1.5px]", attribute "aria-hidden" "true" ]
 
-                                    else
-                                        ""
-                                   )
-                            )
-                            state.icon
+                          else
+                            Icon.view "size-3.5!" state.icon
                         , span [ class "truncate" ] [ text state.label ]
                         ]
 
                 Nothing ->
                     span [ class "truncate text-xs text-muted-foreground" ] [ text ("@" ++ login) ]
 
-        row label control =
-            DropdownMenu.label
-                [ div [ class "flex items-center justify-between gap-4 py-0.5 text-sm font-normal text-popover-foreground" ]
-                    [ span [] [ text label ], control ]
-                ]
+        item attrs icon label =
+            DropdownMenu.item attrs [ Icon.view "" icon, text label ]
 
-        -- Actions, not settings: buttons in the same frame as the theme switch.
-        syncControl open =
-            let
-                button label msg =
-                    Html.button
-                        (type_ "button"
-                            :: class "hover:bg-accent hover:text-foreground disabled:pointer-events-none disabled:opacity-50"
-                            :: (case msg of
-                                    Just chosen ->
-                                        [ onClick chosen ]
-
-                                    Nothing ->
-                                        [ Html.Attributes.disabled True ]
-                               )
-                        )
-                        [ text label ]
-
-                running =
-                    isSyncing session
-            in
-            div [ class ("flex w-40 " ++ segmentedClass), attribute "role" "group", attribute "aria-label" "Sync" ]
-                [ button "Now"
-                    (if running then
-                        Nothing
-
-                     else
-                        Maybe.map Tuple.second (syncState model open).action
-                    )
-                , button "Full"
-                    (if running then
-                        Nothing
-
-                     else
-                        Just (SyncRequested Sync.Rebuild)
-                    )
-                ]
-
-        rows =
+        sync =
             case shelf of
                 Just open ->
-                    [ row "Sync" (syncControl open) ]
+                    let
+                        running =
+                            isSyncing session
+
+                        -- Nothing to start while a sync runs.
+                        whenIdle =
+                            if running then
+                                DropdownMenu.disabled
+
+                            else
+                                identity
+                    in
+                    [ DropdownMenu.separator
+                    , DropdownMenu.label [ text "Sync" ]
+                    , DropdownMenu.group
+                        [ case (syncState model open).action of
+                            Just ( _, msg ) ->
+                                item [ onClick msg ] Icon.refresh "Now"
+                                    |> whenIdle
+
+                            Nothing ->
+                                item [] Icon.refresh "Now"
+                                    |> DropdownMenu.disabled
+                        , item [ onClick (SyncRequested Sync.Rebuild) ] Icon.fullResync "Full sync"
+                            |> whenIdle
+                        ]
+                    ]
 
                 Nothing ->
                     []
+
+        theme value icon label =
+            DropdownMenu.radioItem (model.theme == value) [ onClick (ThemeSelected value) ] [ Icon.view "" icon, text label ]
     in
     DropdownMenu.label
         [ div [ class "flex items-center gap-2 py-0.5 text-start font-normal text-popover-foreground" ]
@@ -1686,9 +1671,15 @@ accountMenu model session =
                 ]
             ]
         ]
-        :: DropdownMenu.separator
-        :: rows
-        ++ [ row "Theme" (themeSwitch model) ]
+        :: sync
+        ++ [ DropdownMenu.separator
+           , DropdownMenu.label [ text "Theme" ]
+           , DropdownMenu.group
+                [ theme Interop.Light Icon.sun "Light"
+                , theme Interop.Dark Icon.moon "Dark"
+                , theme Interop.System Icon.monitor "System"
+                ]
+           ]
 
 
 {-| How syncing feels at a glance: fine, working, waiting on GitHub, or stuck.
@@ -1797,7 +1788,7 @@ syncDot tone =
             text ""
 
         Busy ->
-            dot "animate-spin border-[1.5px] border-sidebar-foreground border-t-transparent bg-sidebar [animation-duration:1s]"
+            Spinner.view [ class "absolute -end-0.5 -bottom-0.5 size-2.5 border-[1.5px] bg-sidebar text-sidebar-foreground ring-2 ring-sidebar", attribute "aria-hidden" "true" ]
 
         Waiting ->
             dot "bg-amber-500"
@@ -2177,35 +2168,6 @@ shelfOf model =
 
 
 -- FOOTER
-
-
-{-| Light, dark or the system's: three icons in one rounded frame, the current one filled.
--}
-themeSwitch : Model -> Html Msg
-themeSwitch model =
-    ToggleGroup.new
-        |> ToggleGroup.onToggle ThemeSelected
-        |> ToggleGroup.pressed [ model.theme ]
-        |> ToggleGroup.small
-        |> ToggleGroup.spacing 1
-        |> ToggleGroup.items
-            [ ToggleGroup.item Interop.Light [ text "Light" ]
-            , ToggleGroup.item Interop.Dark [ text "Dark" ]
-            , ToggleGroup.item Interop.System [ text "System" ]
-            ]
-        |> ToggleGroup.toHtml
-            [ class ("w-40! " ++ segmentedClass ++ " *:aria-pressed:bg-accent *:aria-pressed:text-foreground")
-            , attribute "aria-label" "Theme"
-            ]
-
-
-
-{-| The frame and segments shared by the sync buttons and the theme switch, so the two rows
-of the user menu read alike.
--}
-segmentedClass : String
-segmentedClass =
-    "gap-0.5 rounded-lg border p-0.5 *:h-7 *:min-w-0 *:flex-1 *:rounded-md *:px-1 *:text-xs *:font-medium *:text-muted-foreground"
 
 
 -- TOP BAR
