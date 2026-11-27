@@ -1480,7 +1480,7 @@ viewAccount model =
                 |> DropdownMenu.content (accountMenu model session)
                 |> DropdownMenu.right
                 |> DropdownMenu.alignEnd
-                |> DropdownMenu.toHtml [ class "w-56 max-w-[calc(100vw-2rem)] rounded-lg" ]
+                |> DropdownMenu.toHtml [ class "w-64 max-w-[calc(100vw-2rem)] rounded-lg" ]
 
         Invalid _ ->
             text ""
@@ -1638,7 +1638,7 @@ accountMenu model session =
                 button label msg =
                     Html.button
                         (type_ "button"
-                            :: class "h-7 flex-1 rounded-md px-2 text-xs font-medium text-muted-foreground hover:bg-accent hover:text-foreground disabled:pointer-events-none disabled:opacity-50"
+                            :: class "hover:bg-accent hover:text-foreground disabled:pointer-events-none disabled:opacity-50"
                             :: (case msg of
                                     Just chosen ->
                                         [ onClick chosen ]
@@ -1652,7 +1652,7 @@ accountMenu model session =
                 running =
                     isSyncing session
             in
-            div [ class "flex w-32 gap-0.5 rounded-lg border p-0.5", attribute "role" "group", attribute "aria-label" "Sync" ]
+            div [ class ("flex w-40 " ++ segmentedClass), attribute "role" "group", attribute "aria-label" "Sync" ]
                 [ button "Now"
                     (if running then
                         Nothing
@@ -2189,15 +2189,23 @@ themeSwitch model =
         |> ToggleGroup.small
         |> ToggleGroup.spacing 1
         |> ToggleGroup.items
-            [ ToggleGroup.item Interop.Light [ Icon.view "" Icon.sun ] |> ToggleGroup.label "Light"
-            , ToggleGroup.item Interop.Dark [ Icon.view "" Icon.moon ] |> ToggleGroup.label "Dark"
-            , ToggleGroup.item Interop.System [ Icon.view "" Icon.monitor ] |> ToggleGroup.label "System"
+            [ ToggleGroup.item Interop.Light [ text "Light" ]
+            , ToggleGroup.item Interop.Dark [ text "Dark" ]
+            , ToggleGroup.item Interop.System [ text "System" ]
             ]
         |> ToggleGroup.toHtml
-            [ class "w-32! rounded-lg border p-0.5 *:h-7 *:min-w-0 *:flex-1 *:rounded-md *:px-0 *:text-muted-foreground *:aria-pressed:bg-accent *:aria-pressed:text-foreground"
+            [ class ("w-40! " ++ segmentedClass ++ " *:aria-pressed:bg-accent *:aria-pressed:text-foreground")
             , attribute "aria-label" "Theme"
             ]
 
+
+
+{-| The frame and segments shared by the sync buttons and the theme switch, so the two rows
+of the user menu read alike.
+-}
+segmentedClass : String
+segmentedClass =
+    "gap-0.5 rounded-lg border p-0.5 *:h-7 *:min-w-0 *:flex-1 *:rounded-md *:px-1 *:text-xs *:font-medium *:text-muted-foreground"
 
 
 -- TOP BAR
