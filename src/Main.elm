@@ -1675,7 +1675,7 @@ viewFacet model tallies facet =
     in
     Sidebar.menuItem []
         [ Sidebar.collapsible []
-            (Sidebar.menuTrigger [ class (navClass ++ " group-open/collapsible:text-sidebar-foreground") ]
+            (Sidebar.menuTrigger []
                 [ Icon.bold "" (facetIcon facet)
                 , span [ class "flex-1 truncate" ] [ text (Filters.facetLabel facet) ]
                 , Icon.bold "size-3.5! transition-transform duration-200 group-open/collapsible:rotate-90" Icon.caretRight
@@ -1750,7 +1750,7 @@ facetEntries model facet wanted tallies =
 
         muted attrs icon label =
             Sidebar.menuSubItem []
-                [ Sidebar.menuSubButton (class (navClass ++ " [&>svg]:text-current!") :: attrs)
+                [ Sidebar.menuSubButton (class "text-sidebar-foreground/70 [&>svg]:text-current!" :: attrs)
                     [ Icon.bold "" icon, span [] [ text label ] ]
                 ]
     in
@@ -1793,7 +1793,7 @@ facetItem facet wanted avatars ( value, count ) =
     in
     Sidebar.menuSubItem []
         [ Sidebar.menuSubButton
-            ([ onClick (Picked facet value), attribute "aria-pressed" (boolString isPicked), class ("w-full " ++ navClass) ]
+            ([ onClick (Picked facet value), attribute "aria-pressed" (boolString isPicked), class "w-full" ]
                 ++ (if isPicked then
                         [ Sidebar.active ]
 
@@ -1837,13 +1837,6 @@ boolString b =
 
     else
         "false"
-
-
-{-| Sidebar entries: muted, brightening on hover and when picked or open.
--}
-navClass : String
-navClass =
-    "text-sidebar-foreground/65 hover:text-sidebar-foreground data-active:text-sidebar-foreground"
 
 
 {-| A first sync that hasn't brought any stars in yet.
@@ -1949,7 +1942,7 @@ syncButton model session shelf =
                     , SyncRequested Sync.Refresh
                     )
     in
-    Sidebar.menuButton [ onClick msg, class ("flex-1 " ++ navClass), attribute "aria-busy" (boolString spinning) ]
+    Sidebar.menuButton [ onClick msg, class "flex-1", attribute "aria-busy" (boolString spinning) ]
         [ Icon.bold
             (if spinning then
                 "animate-spin [animation-duration:1.5s]"
