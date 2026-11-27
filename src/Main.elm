@@ -1585,6 +1585,11 @@ accountMenu model session =
                     else
                         identity
                    )
+           , DropdownMenu.separator
+           , DropdownMenu.label
+                [ div [ class "flex items-center justify-between ps-0.5 text-sm font-normal text-popover-foreground" ]
+                    [ text "Theme", themeSwitch model ]
+                ]
            ]
 
 
@@ -2037,39 +2042,24 @@ syncButton model session shelf =
         ]
 
 
-{-| shadcn's mode toggle: the icon of the theme in effect, and a menu of the three choices.
+{-| Light, dark or the system's: three icons in one rounded frame, the current one filled.
 -}
-themeMenu : Model -> Html Msg
-themeMenu model =
-    let
-        option theme icon name =
-            DropdownMenu.radioItem (model.theme == theme) [ onClick (ThemeSelected theme) ] [ Icon.view "" icon, text name ]
-
-        current =
-            if isDark model then
-                Icon.moon
-
-            else
-                Icon.sun
-    in
-    DropdownMenu.new
-        |> DropdownMenu.id "theme"
-        |> DropdownMenu.trigger
-            (Button.new
-                |> Button.icon (Icon.view "" current)
-                |> Button.label "Theme"
-                |> Button.ghost
-                |> Button.toAttributes
-                |> (++) [ class "size-9 md:size-8", attribute "aria-label" "Theme" ]
-            )
-            [ Icon.view "" current ]
-        |> DropdownMenu.content
-            [ option Interop.Light Icon.sun "Light"
-            , option Interop.Dark Icon.moon "Dark"
-            , option Interop.System Icon.monitor "System"
+themeSwitch : Model -> Html Msg
+themeSwitch model =
+    ToggleGroup.new
+        |> ToggleGroup.onToggle ThemeSelected
+        |> ToggleGroup.pressed [ model.theme ]
+        |> ToggleGroup.small
+        |> ToggleGroup.spacing 1
+        |> ToggleGroup.items
+            [ ToggleGroup.item Interop.Light [ Icon.view "" Icon.sun ] |> ToggleGroup.label "Light"
+            , ToggleGroup.item Interop.Dark [ Icon.view "" Icon.moon ] |> ToggleGroup.label "Dark"
+            , ToggleGroup.item Interop.System [ Icon.view "" Icon.monitor ] |> ToggleGroup.label "System"
             ]
-        |> DropdownMenu.alignEnd
-        |> DropdownMenu.toHtml [ class "w-36" ]
+        |> ToggleGroup.toHtml
+            [ class "rounded-lg border p-0.5 *:size-7 *:min-w-0 *:rounded-md *:px-0 *:text-muted-foreground *:aria-pressed:bg-accent *:aria-pressed:text-foreground"
+            , attribute "aria-label" "Theme"
+            ]
 
 
 
@@ -2082,7 +2072,6 @@ viewTopBar model =
         [ div [ class "mx-auto flex h-14 w-full max-w-3xl items-center gap-2 px-2 md:px-4" ]
             [ Sidebar.trigger [ class "size-9 md:size-8" ] model.sidebar SidebarChanged
             , viewSearch model
-            , themeMenu model
             ]
         , viewProgress model
         ]
