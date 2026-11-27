@@ -43,7 +43,7 @@ import UI.Sidebar as Sidebar
 import UI.Skeleton as Skeleton
 import UI.Slider as Slider
 import UI.Toast as Toast
-import UI.ToggleGroup as ToggleGroup
+import UI.Tabs as Tabs
 import Url exposing (Url)
 
 
@@ -1569,6 +1569,8 @@ isSyncing session =
 -- FILTERS
 
 
+{-| One section, because everything in it narrows the same list: "Clear all" means all of it.
+-}
 viewFilters : Model -> List (Html Msg)
 viewFilters model =
     let
@@ -1576,7 +1578,7 @@ viewFilters model =
             model.filters
     in
     [ Sidebar.group []
-        [ Sidebar.groupLabel [ class "justify-between pe-0" ]
+        [ Sidebar.groupLabel [ class "justify-between pe-0 text-sidebar-foreground!" ]
             [ text "Filters"
             , if Filters.isInitial filters then
                 text ""
@@ -1589,54 +1591,68 @@ viewFilters model =
                     |> Button.extraSmall
                     |> Button.toHtml [ onClick FiltersReset, class "-me-1 text-sidebar-foreground" ]
             ]
-        , Sidebar.groupContent [ class "flex flex-col gap-2 px-1" ]
-            [ segmented "Status"
-                LifecycleChosen
-                filters.lifecycle
-                [ ( Any, "All" ), ( Only Active, "Active" ), ( Only Archived, "Archived" ) ]
-            , segmented "Type"
-                OriginChosen
-                filters.origin
-                [ ( Any, "All" ), ( Only Source, "Sources" ), ( Only Fork, "Forks" ) ]
+        , Sidebar.groupContent [ class "flex flex-col gap-4 px-1 pt-1" ]
+            [ filterField "Lifecycle"
+                []
+                (segmented "Lifecycle"
+                    LifecycleChosen
+                    filters.lifecycle
+                    [ ( Any, "All" ), ( Only Active, "Active" ), ( Only Archived, "Archived" ) ]
+                )
+            , filterField "Origin"
+                []
+                (segmented "Origin"
+                    OriginChosen
+                    filters.origin
+                    [ ( Any, "All" ), ( Only Source, "Sources" ), ( Only Fork, "Forks" ) ]
+                )
+            , filterField "Stars"
+                [ span [ class "tabular-nums text-sidebar-foreground" ] [ text (Filters.starsLabel filters.stars) ] ]
+                (div [ class "px-1 pt-1" ]
+                    [ Slider.new
+                        |> Slider.range (Tuple.first (Filters.starsToSlider filters.stars)) (Tuple.second (Filters.starsToSlider filters.stars))
+                        |> Slider.onChange StarsChanged
+                        |> Slider.min 0
+                        |> Slider.max (toFloat Filters.tierCount)
+                        |> Slider.step 1
+                        |> Slider.toHtml [ attribute "aria-label" "Stars" ]
+                    , div [ class "mt-2 flex justify-between text-[10px] text-muted-foreground tabular-nums" ]
+                        (List.map (\label -> span [] [ text label ]) [ "0", "10", "100", "1k", "10k", "100k", "∞" ])
+                    ]
+                )
             ]
-        ]
-    , Sidebar.group []
-        [ Sidebar.groupLabel [ class "justify-between" ]
-            [ text "Stars"
-            , span [ class "font-normal tabular-nums text-sidebar-foreground" ] [ text (Filters.starsLabel filters.stars) ]
-            ]
-        , Sidebar.groupContent [ class "px-2 pt-1 pb-2" ]
-            [ Slider.new
-                |> Slider.range (Tuple.first (Filters.starsToSlider filters.stars)) (Tuple.second (Filters.starsToSlider filters.stars))
-                |> Slider.onChange StarsChanged
-                |> Slider.min 0
-                |> Slider.max (toFloat Filters.tierCount)
-                |> Slider.step 1
-                |> Slider.toHtml [ attribute "aria-label" "Stars" ]
-            , div [ class "mt-2 flex justify-between text-[10px] text-muted-foreground tabular-nums" ]
-                (List.map (\label -> span [] [ text label ]) [ "0", "10", "100", "1k", "10k", "100k", "∞" ])
-            ]
+        , viewFacets model
         ]
     ]
-        ++ viewFacets model
 
 
+{-| A filter inside the section: a small label, anything that goes beside it, and the control.
+-}
+filterField : String -> List (Html Msg) -> Html Msg -> Html Msg
+filterField label aside control =
+    div [ class "flex flex-col gap-1.5" ]
+        [ div [ class "flex items-center justify-between px-1 text-xs text-muted-foreground" ]
+            (text label :: aside)
+        , control
+        ]
+
+
+{-| Exactly one of the options is always chosen, which is what tabs say, without panels.
+-}
 segmented : String -> (Choice a -> Msg) -> Choice a -> List ( Choice a, String ) -> Html Msg
 segmented label toMsg current options =
-    ToggleGroup.new
-        |> ToggleGroup.onToggle toMsg
-        |> ToggleGroup.pressed [ current ]
-        |> ToggleGroup.outline
-        |> ToggleGroup.small
-        |> ToggleGroup.spacing 0
-        |> ToggleGroup.items (List.map (\( value, name ) -> ToggleGroup.item value [ text name ]) options)
-        |> ToggleGroup.toHtml [ class "w-full *:flex-1 *:bg-background", attribute "aria-label" label ]
+    Tabs.new
+        |> Tabs.id ("filter-" ++ String.toLower label)
+        |> Tabs.onSelect toMsg
+        |> Tabs.value current
+        |> Tabs.tabs (List.map (\( value, name ) -> Tabs.tab value [ text name ] []) options)
+        |> Tabs.toHtml [ class "[&_[role=tablist]]:w-full", attribute "aria-label" label ]
 
 
 {-| Languages, topics and users, each a section that starts collapsed. A section's header
 counts its picks, so filters hidden inside a collapsed section are still in view.
 -}
-viewFacets : Model -> List (Html Msg)
+viewFacets : Model -> Html Msg
 viewFacets model =
     let
         tallies =
@@ -1661,14 +1677,10 @@ viewFacets model =
     in
     case tallies of
         Just counted ->
-            [ Sidebar.group []
-                [ Sidebar.groupLabel [] [ text "Browse" ]
-                , Sidebar.menu [] (List.map (viewFacet model counted) Filters.facets)
-                ]
-            ]
+            Sidebar.menu [ class "mt-5" ] (List.map (viewFacet model counted) Filters.facets)
 
         Nothing ->
-            []
+            text ""
 
 
 viewFacet : Model -> Maybe Tallies -> Facet -> Html Msg
