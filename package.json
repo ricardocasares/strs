@@ -7,13 +7,16 @@
     "dev:mock": "npm run types && MOCK_GITHUB=dev/fixtures vite",
     "build": "npm run types && vite build",
     "preview": "vite preview",
-    "types": "elm-ts-interop --output src/Main.elm.d.ts"
+    "types": "elm-ts-interop --output src/Main.elm.d.ts",
+    "font:logo": "node dev/subset-logo-font.mjs"
   },
   "devDependencies": {
+    "@fontsource/major-mono-display": "^5.3.0",
     "@tailwindcss/vite": "4.3.3",
     "@types/node": "^26.6.11",
     "elm": "^0.19.3-0",
     "elm-ts-interop": "^0.0.8",
+    "subset-font": "^2.9.0",
     "tailwindcss": "4.3.3",
     "typescript": "^7.0.2",
     "vite": "^8.3.4",

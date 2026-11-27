@@ -88,8 +88,17 @@
   --sidebar-ring: oklch(0.556 0 0);
 }
 
+/* Major Mono Display (OFL, see fonts/OFL.txt), cut down to the wordmark's three glyphs by
+   dev/subset-logo-font.mjs. It's tiny, so the text waits for it rather than flashing another font. */
+@font-face {
+  font-family: "Major Mono Display";
+  src: url("./fonts/major-mono-display-logo.woff2") format("woff2");
+  font-display: block;
+}
+
 @theme {
   --font-sans: "Inter Variable", ui-sans-serif, system-ui, sans-serif;
+  --font-logo: "Major Mono Display", ui-monospace, monospace;
 }
 
 @theme inline {

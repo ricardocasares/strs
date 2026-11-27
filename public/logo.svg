@@ -1,7 +1,0 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="84 36 676 178" fill="none" stroke="currentColor" stroke-width="7" stroke-linejoin="miter" stroke-miterlimit="10">
-  <title>strs</title>
-  <path id="s" d="M219 94C219 61 192 42 157 42 122 42 96 60 96 84 96 108 117 118 157 125 202 132 222 145 222 170 222 195 194 208 157 208 120 208 93 191 92 155"/>
-  <path d="M265 46H400M332 46V212"/>
-  <path d="M520 130H534A42 42 0 0 0 534 46H455V207H576L459 46"/>
-  <use href="#s" x="535"/>
-</svg>

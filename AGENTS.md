@@ -86,3 +86,9 @@ The unauthenticated limit is 60 requests an hour per IP. `npm run dev:mock` serv
 recorded stars from `dev/fixtures` instead (record them with `dev/record.sh <login>`, which
 uses the authenticated `gh` CLI). `dev/mock-github.ts` documents the knobs at
 `/__github/__control` for simulating rate limits, 429s, new stars and going offline.
+
+## Logo
+
+The wordmark is the text "stRs" in Major Mono Display (lower case are its thin capitals,
+upper case R is the triangle R). `src/fonts/major-mono-display-logo.woff2` holds only those
+glyphs; regenerate it with `npm run font:logo` if the wordmark changes.
