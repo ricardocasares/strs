@@ -43,7 +43,7 @@ import UI.Sidebar as Sidebar
 import UI.Skeleton as Skeleton
 import UI.Slider as Slider
 import UI.Toast as Toast
-import UI.Tabs as Tabs
+import UI.ToggleGroup as ToggleGroup
 import Url exposing (Url)
 
 
@@ -1637,16 +1637,17 @@ filterField label aside control =
         ]
 
 
-{-| Exactly one of the options is always chosen, which is what tabs say, without panels.
+{-| Exactly one option is always pressed: picking another moves the press.
 -}
 segmented : String -> (Choice a -> Msg) -> Choice a -> List ( Choice a, String ) -> Html Msg
 segmented label toMsg current options =
-    Tabs.new
-        |> Tabs.id ("filter-" ++ String.toLower label)
-        |> Tabs.onSelect toMsg
-        |> Tabs.value current
-        |> Tabs.tabs (List.map (\( value, name ) -> Tabs.tab value [ text name ] []) options)
-        |> Tabs.toHtml [ class "[&_[role=tablist]]:w-full", attribute "aria-label" label ]
+    ToggleGroup.new
+        |> ToggleGroup.onToggle toMsg
+        |> ToggleGroup.pressed [ current ]
+        |> ToggleGroup.outline
+        |> ToggleGroup.small
+        |> ToggleGroup.items (List.map (\( value, name ) -> ToggleGroup.item value [ text name ]) options)
+        |> ToggleGroup.toHtml [ class "w-full *:flex-1", attribute "aria-label" label ]
 
 
 {-| Languages, topics and users, each a section that starts collapsed. A section's header
