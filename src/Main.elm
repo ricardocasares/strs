@@ -1433,7 +1433,7 @@ view model =
                         filters =
                             viewFilters model
                      in
-                     viewFacets model ++ [ viewOrder model, filters.stars, filters.lifecycle, filters.origin ]
+                     filters.stars :: viewFacets model ++ [ viewOrder model, filters.lifecycle, filters.origin ]
                     )
                 |> Sidebar.footer [ viewAccount model ]
                 |> Sidebar.rail
