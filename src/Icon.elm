@@ -2,7 +2,7 @@ module Icon exposing
     ( Icon, view
     , search, close, star, fork, archive, refresh, sun, moon
     , monitor, chevronsUpDown, caretDown, caretUp, sort, userX, searchX, clock
-    , hash, code, users, wideFirst, narrowFirst, fullResync
+    , hash, code, users, wideFirst, narrowFirst, starHalf, fullResync
     )
 
 {-| The app's Phosphor icons, named for what they mean here.
@@ -138,3 +138,8 @@ narrowFirst =
 fullResync : Icon
 fullResync =
     Phosphor.cloudCheck
+
+
+starHalf : Icon
+starHalf =
+    Phosphor.starHalf
