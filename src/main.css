@@ -603,3 +603,8 @@
   }
 }
 
+
+/* The sort select narrows with the screen; its list keeps room for the longest order. */
+#order-popover {
+  min-width: 10rem;
+}

@@ -1431,7 +1431,7 @@ viewLogo model =
                 , attribute "aria-label" "strs"
                 , class "flex h-12 items-center rounded-md px-2 text-sidebar-foreground ring-sidebar-ring outline-hidden focus-visible:ring-2"
                 ]
-                [ Logo.view "h-5 w-auto" ]
+                [ Logo.view "h-7 w-auto" ]
             ]
         ]
 
@@ -2063,6 +2063,7 @@ viewTopBar model =
         [ div [ class "mx-auto flex h-14 w-full max-w-3xl items-center gap-2 px-2 md:px-4" ]
             [ Sidebar.trigger [ class "size-9 md:size-8" ] model.sidebar SidebarChanged
             , viewSearch model
+            , viewOrder model
             ]
         , viewProgress model
         ]
@@ -2135,36 +2136,16 @@ escapeKey msg =
             )
 
 
-{-| Above the results: how many there are, and the order they're in.
+{-| The order of the results, beside the search.
 -}
-viewToolbar : Model -> Shelf -> Html Msg
-viewToolbar model shelf =
-    let
-        total =
-            Index.size shelf.index
-
-        count =
-            if shelf.results.matches == total then
-                Format.thousands total ++ " stars"
-
-            else
-                Format.thousands shelf.results.matches ++ " of " ++ Format.thousands total
-    in
-    div [ class toolbarClass ]
-        [ span [ class "text-sm text-muted-foreground tabular-nums" ] [ text count ]
-        , Select.new
-            |> Select.id "order"
-            |> Select.onSelect OrderChosen
-            |> Select.value (Just model.order)
-            |> Select.items (List.map (\order -> Select.item order [ text (Filters.orderLabel order) ]) Filters.orders)
-            |> Select.small
-            |> Select.toHtml [ class "w-40", attribute "aria-label" "Sort" ]
-        ]
-
-
-toolbarClass : String
-toolbarClass =
-    "flex h-11 items-center justify-between gap-2 ps-2.5 md:ps-3"
+viewOrder : Model -> Html Msg
+viewOrder model =
+    Select.new
+        |> Select.id "order"
+        |> Select.onSelect OrderChosen
+        |> Select.value (Just model.order)
+        |> Select.items (List.map (\order -> Select.item order [ text (Filters.orderLabel order) ]) Filters.orders)
+        |> Select.toHtml [ class "w-32 shrink-0 max-md:h-9! md:w-40", attribute "aria-label" "Sort" ]
 
 
 {-| A hairline along the bottom of the bar while stars sync: how far through the pages, when
@@ -2313,10 +2294,7 @@ viewShelf model session shelf =
             |> Empty.toHtml [ class "mt-16" ]
 
     else
-        div []
-            [ viewToolbar model shelf
-            , viewHits model shelf
-            ]
+        viewHits model shelf
 
 
 viewHits : Model -> Shelf -> Html Msg
@@ -2460,14 +2438,8 @@ segments words content =
 
 skeletonList : Int -> Html msg
 skeletonList count =
-    div []
-        [ div [ class toolbarClass ]
-            [ Skeleton.view [ class "h-3.5 w-24" ]
-            , Skeleton.view [ class "h-7 w-40 rounded-lg" ]
-            ]
-        , Html.ul [ class "flex flex-col gap-0.5", attribute "aria-busy" "true", attribute "aria-label" "Loading stars" ]
-            (List.repeat count skeletonHit)
-        ]
+    Html.ul [ class "flex flex-col gap-0.5", attribute "aria-busy" "true", attribute "aria-label" "Loading stars" ]
+        (List.repeat count skeletonHit)
 
 
 {-| The same item, with the same paddings, as a real row: content doesn't move when it lands.
