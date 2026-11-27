@@ -232,8 +232,12 @@ starsToSlider (Stars low high) =
 {-| The range as star counts for a link: `1000-`, `10-1000`, `-100`, or nothing for any.
 -}
 starsToString : Stars -> String
-starsToString (Stars low high) =
-    if Stars low high == anyStars then
+starsToString stars =
+    let
+        ( low, high ) =
+            span stars
+    in
+    if stars == anyStars then
         ""
 
     else
@@ -292,8 +296,28 @@ tier index =
     Array.get index tiers
 
 
+{-| The tiers a range covers. When both thumbs sit on the same stop, the range is the step
+that starts there: both on 1k means 1k–10k, both at the top means 100k and up. A range never
+narrows down to a single count.
+-}
+span : Stars -> ( Int, Int )
+span (Stars low high) =
+    if low < high then
+        ( low, high )
+
+    else if low < tierCount then
+        ( low, low + 1 )
+
+    else
+        ( tierCount - 1, tierCount )
+
+
 inStars : Stars -> Int -> Bool
-inStars (Stars low high) count =
+inStars stars count =
+    let
+        ( low, high ) =
+            span stars
+    in
     (Maybe.withDefault 0 (tier low) <= count)
         && (case tier high of
                 Just bound ->
@@ -305,7 +329,11 @@ inStars (Stars low high) count =
 
 
 starsLabel : Stars -> String
-starsLabel (Stars low high) =
+starsLabel stars =
+    let
+        ( low, high ) =
+            span stars
+    in
     case ( tier low, tier high ) of
         ( Just 0, Nothing ) ->
             "Any"
@@ -317,11 +345,7 @@ starsLabel (Stars low high) =
             "≤ " ++ Format.compact to
 
         ( Just from, Just to ) ->
-            if from == to then
-                Format.compact from
-
-            else
-                Format.compact from ++ "–" ++ Format.compact to
+            Format.compact from ++ "–" ++ Format.compact to
 
         ( Nothing, _ ) ->
             "Any"
