@@ -1574,9 +1574,8 @@ tile classes login avatar =
         ]
 
 
-{-| Whose stars these are and where syncing them stands, the sync actions, then the theme.
-Where syncing stands is a line of text, never a button: the action below it is the one that
-fits.
+{-| Whose stars these are and where syncing them stands, then a row each for syncing and the
+theme. Where syncing stands is a line of text, never a button.
 -}
 accountMenu : Model -> Session -> List (DropdownMenu.Item Msg)
 accountMenu model session =
@@ -1591,9 +1590,6 @@ accountMenu model session =
 
                 _ ->
                     ( login, Nothing )
-
-        action attrs icon label =
-            DropdownMenu.item attrs [ Icon.view "" icon, text label ]
 
         shelf =
             case ( session.account, session.library ) of
@@ -1630,25 +1626,53 @@ accountMenu model session =
                 Nothing ->
                     span [ class "truncate text-xs text-muted-foreground" ] [ text ("@" ++ login) ]
 
-        actions =
+        row label control =
+            DropdownMenu.label
+                [ div [ class "flex items-center justify-between gap-4 py-0.5 text-sm font-normal text-popover-foreground" ]
+                    [ span [] [ text label ], control ]
+                ]
+
+        -- Actions, not settings: buttons in the same frame as the theme switch.
+        syncControl open =
+            let
+                button label msg =
+                    Html.button
+                        (type_ "button"
+                            :: class "h-7 flex-1 rounded-md px-2 text-xs font-medium text-muted-foreground hover:bg-accent hover:text-foreground disabled:pointer-events-none disabled:opacity-50"
+                            :: (case msg of
+                                    Just chosen ->
+                                        [ onClick chosen ]
+
+                                    Nothing ->
+                                        [ Html.Attributes.disabled True ]
+                               )
+                        )
+                        [ text label ]
+
+                running =
+                    isSyncing session
+            in
+            div [ class "flex w-32 gap-0.5 rounded-lg border p-0.5", attribute "role" "group", attribute "aria-label" "Sync" ]
+                [ button "Now"
+                    (if running then
+                        Nothing
+
+                     else
+                        Maybe.map Tuple.second (syncState model open).action
+                    )
+                , button "Full"
+                    (if running then
+                        Nothing
+
+                     else
+                        Just (SyncRequested Sync.Rebuild)
+                    )
+                ]
+
+        rows =
             case shelf of
                 Just open ->
-                    DropdownMenu.separator
-                        :: (case (syncState model open).action of
-                                Just ( label, msg ) ->
-                                    [ action [ onClick msg ] Icon.refresh label ]
-
-                                Nothing ->
-                                    []
-                           )
-                        ++ [ action [ onClick (SyncRequested Sync.Rebuild) ] Icon.fullResync "Full resync"
-                                |> (if isSyncing session then
-                                        DropdownMenu.disabled
-
-                                    else
-                                        identity
-                                   )
-                           ]
+                    [ row "Sync" (syncControl open) ]
 
                 Nothing ->
                     []
@@ -1662,11 +1686,9 @@ accountMenu model session =
                 ]
             ]
         ]
-        :: actions
-        ++ [ DropdownMenu.separator
-           , DropdownMenu.label [ text "Theme" ]
-           , DropdownMenu.label [ div [ class "pb-1" ] [ themeSwitch model ] ]
-           ]
+        :: DropdownMenu.separator
+        :: rows
+        ++ [ row "Theme" (themeSwitch model) ]
 
 
 {-| How syncing feels at a glance: fine, working, waiting on GitHub, or stuck.
@@ -2172,7 +2194,7 @@ themeSwitch model =
             , ToggleGroup.item Interop.System [ Icon.view "" Icon.monitor ] |> ToggleGroup.label "System"
             ]
         |> ToggleGroup.toHtml
-            [ class "w-full rounded-lg border p-0.5 *:h-7 *:min-w-0 *:flex-1 *:rounded-md *:px-0 *:text-muted-foreground *:aria-pressed:bg-accent *:aria-pressed:text-foreground"
+            [ class "w-32! rounded-lg border p-0.5 *:h-7 *:min-w-0 *:flex-1 *:rounded-md *:px-0 *:text-muted-foreground *:aria-pressed:bg-accent *:aria-pressed:text-foreground"
             , attribute "aria-label" "Theme"
             ]
 
