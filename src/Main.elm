@@ -9,8 +9,8 @@ import Filters exposing (Choice(..), Facet, Filters, Order(..))
 import Format
 import GitHub
 import Html exposing (Html, div, span, text)
-import Html.Attributes exposing (alt, attribute, autocomplete, class, disabled, href, id, placeholder, rel, spellcheck, src, target, type_, value)
-import Html.Events exposing (onClick, onInput, onSubmit)
+import Html.Attributes exposing (alt, attribute, autocomplete, class, href, id, placeholder, rel, spellcheck, src, target, type_, value)
+import Html.Events exposing (onClick, onInput)
 import Html.Keyed
 import Html.Lazy
 import Icon
@@ -33,7 +33,6 @@ import Tokens
 import UI.Avatar as Avatar
 import UI.Badge as Badge
 import UI.Button as Button
-import UI.Dialog as Dialog
 import UI.DropdownMenu as DropdownMenu
 import UI.Empty as Empty
 import UI.InputGroup as InputGroup
@@ -76,7 +75,6 @@ type alias Model =
     , sidebar : Sidebar.State
     , toaster : Toast.Toaster Msg
     , accounts : List Summary
-    , browse : Browse
     , query : String
     , filters : Filters
     , expanded : List Facet
@@ -196,11 +194,6 @@ type alias Summary =
     }
 
 
-type Browse
-    = Closed
-    | Browsing String
-
-
 {-| Rows rendered at once. Two screens' worth: the rest stream in before they're scrolled to,
 and every keystroke re-renders only these.
 -}
@@ -244,7 +237,6 @@ init json url key =
                 }
             , toaster = Toast.init
             , accounts = []
-            , browse = Closed
             , query = ""
             , filters = Filters.initial
             , expanded = []
@@ -306,7 +298,6 @@ visit login model =
         | page = Stars { login = login, account = Unknown, library = Opening }
         , filters = { initial | stars = model.filters.stars, lifecycle = model.filters.lifecycle, origin = model.filters.origin }
         , limit = pageSize
-        , browse = Closed
         , sidebar = { open = model.sidebar.open, openMobile = False }
       }
     , InteropPorts.fromElm (Interop.LoadUser (Login.toString login))
@@ -504,10 +495,7 @@ type Msg
     | GotProfile Login ( GitHub.Response (Time.Posix -> Profile), Time.Posix )
     | Resumed Login Time.Posix
     | VisibilityChanged Browser.Events.Visibility
-    | BrowseOpened
-    | BrowseClosed
-    | BrowseChanged String
-    | BrowseSubmitted Login
+    | UserChosen Login
     | ProfileOpened String
 
 
@@ -636,17 +624,8 @@ update msg model =
         VisibilityChanged Browser.Events.Hidden ->
             ( model, Cmd.none )
 
-        BrowseOpened ->
-            ( { model | browse = Browsing "" }, focus "browse" )
-
-        BrowseClosed ->
-            ( { model | browse = Closed }, Cmd.none )
-
-        BrowseChanged draft ->
-            ( { model | browse = Browsing draft }, Cmd.none )
-
-        BrowseSubmitted login ->
-            ( { model | browse = Closed }, Nav.pushUrl model.key (model.base ++ Login.toString login) )
+        UserChosen login ->
+            ( model, Nav.pushUrl model.key (model.base ++ Login.toString login) )
 
         ProfileOpened url ->
             ( model, InteropPorts.fromElm (Interop.OpenUrl url) )
@@ -1409,12 +1388,12 @@ view model =
                     )
                 |> Sidebar.footer [ viewAccount model ]
                 |> Sidebar.rail
-                |> Sidebar.page [ class "min-w-0" ]
+                |> Sidebar.inset
+                |> Sidebar.page [ class "min-w-0 md:h-[calc(100svh-1rem)] md:overflow-y-auto" ]
                     [ viewTopBar model
                     , Html.section [ class "mx-auto w-full max-w-3xl px-2 pt-2 pb-16 md:px-4" ] [ viewMain model ]
                     ]
                 |> Sidebar.toHtml []
-            , viewBrowse model
             , Toast.view ToastMsg model.toaster
             ]
         ]
@@ -1457,8 +1436,7 @@ viewAccount model =
                 |> DropdownMenu.toHtml [ class "w-56 max-w-[calc(100vw-2rem)] rounded-lg" ]
 
         Invalid _ ->
-            Sidebar.menuButton [ Sidebar.large, onClick BrowseOpened ]
-                [ Icon.view "" Icon.userSearch, span [] [ text "Browse a user" ] ]
+            text ""
 
 
 viewIdentity : Session -> Html Msg
@@ -1553,7 +1531,7 @@ accountMenu model session =
             List.map
                 (\summary ->
                     DropdownMenu.item
-                        [ onClick (BrowseSubmitted (Maybe.withDefault session.login (Login.fromString summary.login)))
+                        [ onClick (UserChosen (Maybe.withDefault session.login (Login.fromString summary.login)))
                         , attribute "aria-current" (boolString (summary.login == current))
                         ]
                         [ tile "size-5 rounded-full" summary.login (Maybe.map .avatar summary.profile)
@@ -1582,18 +1560,24 @@ accountMenu model session =
                 ( _, Opening ) ->
                     []
     in
-    [ DropdownMenu.label [ text "Users" ]
-    , DropdownMenu.group (users ++ [ action [ onClick BrowseOpened ] Icon.userSearch "Browse user…" ])
-    , DropdownMenu.separator
-    , DropdownMenu.label [ text "Stars" ]
-    , DropdownMenu.group
-        (action [ onClick (ProfileOpened ("https://github.com/" ++ current ++ "?tab=stars")) ] Icon.external "Open on GitHub"
-            :: sync
-        )
-    , DropdownMenu.separator
-    , DropdownMenu.label [ text "Theme" ]
-    , DropdownMenu.label [ div [ class "pb-1" ] [ themeSwitch model ] ]
-    ]
+    (if List.isEmpty users then
+        []
+
+     else
+        [ DropdownMenu.label [ text "Users" ]
+        , DropdownMenu.group users
+        , DropdownMenu.separator
+        ]
+    )
+        ++ [ DropdownMenu.label [ text "Stars" ]
+           , DropdownMenu.group
+                (action [ onClick (ProfileOpened ("https://github.com/" ++ current ++ "?tab=stars")) ] Icon.external "Open on GitHub"
+                    :: sync
+                )
+           , DropdownMenu.separator
+           , DropdownMenu.label [ text "Theme" ]
+           , DropdownMenu.label [ div [ class "pb-1" ] [ themeSwitch model ] ]
+           ]
 
 
 {-| Syncing is held up for longer than a skeleton should pulse.
@@ -2220,7 +2204,6 @@ viewMain model =
                 |> Empty.icon (Icon.view "" Icon.userX)
                 |> Empty.title [ text "Not a GitHub username" ]
                 |> Empty.description [ text ("“" ++ segment ++ "” can't be a GitHub user.") ]
-                |> Empty.content [ browseButton ]
                 |> Empty.toHtml [ class "mt-16" ]
 
         Stars session ->
@@ -2229,8 +2212,7 @@ viewMain model =
                     Empty.new
                         |> Empty.icon (Icon.view "" Icon.userX)
                         |> Empty.title [ text ("No user named @" ++ Login.toString session.login) ]
-                        |> Empty.content [ browseButton ]
-                        |> Empty.toHtml [ class "mt-16" ]
+                                |> Empty.toHtml [ class "mt-16" ]
 
                 ( _, Opening ) ->
                     skeletonList 10
@@ -2245,15 +2227,6 @@ retryButton =
         |> Button.text "Retry now"
         |> Button.outline
         |> Button.toHtml [ onClick RetryRequested ]
-
-
-browseButton : Html Msg
-browseButton =
-    Button.new
-        |> Button.text "Browse another user"
-        |> Button.outline
-        |> Button.startIcon (Icon.view "" Icon.userSearch)
-        |> Button.toHtml [ onClick BrowseOpened ]
 
 
 viewShelf : Model -> Session -> Shelf -> Html Msg
@@ -2283,8 +2256,7 @@ viewShelf model session shelf =
                 Empty.new
                     |> Empty.icon (Icon.view "" Icon.star)
                     |> Empty.title [ text ("@" ++ Login.toString session.login ++ " hasn't starred anything") ]
-                    |> Empty.content [ browseButton ]
-                    |> Empty.toHtml [ class "mt-16" ]
+                        |> Empty.toHtml [ class "mt-16" ]
 
             _ ->
                 skeletonList 10
@@ -2482,60 +2454,3 @@ skeletonHit =
 
 
 -- BROWSE
-
-
-viewBrowse : Model -> Html Msg
-viewBrowse model =
-    let
-        draft =
-            case model.browse of
-                Browsing text_ ->
-                    text_
-
-                Closed ->
-                    ""
-
-        parsed =
-            Login.fromString draft
-
-        invalid =
-            not (String.isEmpty (String.trim draft)) && parsed == Nothing
-    in
-    Dialog.new
-        |> Dialog.id "browse-dialog"
-        |> Dialog.open (model.browse /= Closed) BrowseClosed
-        |> Dialog.title [ text "Browse stars" ]
-        |> Dialog.content
-            [ Html.form
-                [ id "browse-form"
-                , onSubmit
-                    (case parsed of
-                        Just login ->
-                            BrowseSubmitted login
-
-                        Nothing ->
-                            Ignored
-                    )
-                ]
-                [ InputGroup.view []
-                    [ InputGroup.input
-                        [ id "browse"
-                        , placeholder "username"
-                        , value draft
-                        , onInput BrowseChanged
-                        , autocomplete False
-                        , spellcheck False
-                        , attribute "autocapitalize" "off"
-                        , attribute "aria-label" "GitHub username"
-                        , attribute "aria-invalid" (boolString invalid)
-                        ]
-                    , InputGroup.start [] [ InputGroup.text [] [ text "@" ] ]
-                    ]
-                ]
-            ]
-        |> Dialog.footer []
-            [ Button.new
-                |> Button.text "View stars"
-                |> Button.toHtml [ type_ "submit", attribute "form" "browse-form", disabled (parsed == Nothing) ]
-            ]
-        |> Dialog.toHtml []
