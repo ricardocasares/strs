@@ -74,7 +74,8 @@ export const mockGitHub = (dir: string): Plugin => {
         if (req.method === "OPTIONS") return send(204, null);
 
         if (url.pathname === "/__control") {
-          for (const key of ["limit", "window", "retryAfter", "hide", "latency"] as const) {
+          const numeric: ("limit" | "window" | "retryAfter" | "hide" | "latency")[] = ["limit", "window", "retryAfter", "hide", "latency"];
+          for (const key of numeric) {
             const value = url.searchParams.get(key);
             if (value !== null) state[key] = Number(value);
           }

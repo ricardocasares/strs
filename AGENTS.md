@@ -94,3 +94,10 @@ uses the authenticated `gh` CLI). `dev/mock-github.ts` documents the knobs at
 The wordmark is the text "stRs" in Major Mono Display (lower case are its thin capitals,
 upper case R is the triangle R). `src/fonts/major-mono-display-logo.woff2` holds only those
 glyphs; regenerate it with `npm run font:logo` if the wordmark changes.
+
+## TypeScript
+
+- No type assertions (`as`), including `as const`: narrow with type guards, or type values
+  through annotations.
+- Switches over a union end with `default: x satisfies never`, so a new variant from Elm
+  doesn't type-check until it's handled.

@@ -1,9 +1,9 @@
 // A thin promise wrapper over IndexedDB. Elm decides what is stored; this only knows the two
 // object stores and how to read and write them.
 
-type Operation =
-  | { tag: "Put"; store: "repos" | "accounts"; value: unknown }
-  | { tag: "Delete"; store: "repos" | "accounts"; key: unknown };
+import type { FromElm, JsonValue } from "./Main.elm";
+
+type Operation = Extract<FromElm, { tag: "Write" }>["operations"][number];
 
 const request = <T>(req: IDBRequest<T>) =>
   new Promise<T>((resolve, reject) => {
@@ -21,7 +21,9 @@ const connection = new Promise<IDBDatabase>((resolve, reject) => {
   req.onerror = () => reject(req.error);
 });
 
-export const loadUser = async (login: string) => {
+// Everything in the stores was written by Elm as JSON, so it reads back as JSON: IndexedDB
+// types its results `any`, which the return types narrow without assertions.
+export const loadUser = async (login: string): Promise<{ repos: JsonValue; account: JsonValue }> => {
   const tx = (await connection).transaction(["repos", "accounts"]);
   const [repos, account] = await Promise.all([
     request(tx.objectStore("repos").index("login").getAll(IDBKeyRange.only(login))),
@@ -30,15 +32,30 @@ export const loadUser = async (login: string) => {
   return { repos, account: account ?? null };
 };
 
-export const loadAccounts = async () =>
+export const loadAccounts = async (): Promise<JsonValue> =>
   request((await connection).transaction("accounts").objectStore("accounts").getAll());
+
+// Keys are what Elm encodes for them: a login, or a login and a repo id.
+const isKey = (value: JsonValue): value is string | number | (string | number)[] =>
+  typeof value === "string" ||
+  typeof value === "number" ||
+  (Array.isArray(value) && value.every((part) => typeof part === "string" || typeof part === "number"));
 
 export const write = async (operations: Operation[]) => {
   const tx = (await connection).transaction(["repos", "accounts"], "readwrite");
   for (const op of operations) {
     const store = tx.objectStore(op.store);
-    if (op.tag === "Put") store.put(op.value);
-    else store.delete(op.key as IDBValidKey);
+    switch (op.tag) {
+      case "Put":
+        store.put(op.value);
+        break;
+      case "Delete":
+        if (!isKey(op.key)) throw new Error(`Not a key: ${JSON.stringify(op.key)}`);
+        store.delete(op.key);
+        break;
+      default:
+        op satisfies never;
+    }
   }
   await new Promise<void>((resolve, reject) => {
     tx.oncomplete = () => resolve();

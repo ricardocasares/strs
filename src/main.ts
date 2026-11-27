@@ -16,6 +16,9 @@ const setting = (key: string) => {
 
 const blockedUntil = Number(setting("blockedUntil"));
 
+const theme = (value: string | null): Flags["theme"] =>
+  value === "light" || value === "dark" || value === "system" ? value : null;
+
 //-- ELEMENTS
 
 // <in-view> fires `visible` when it scrolls near the viewport, for loading more results.
@@ -39,7 +42,7 @@ customElements.define(
 
 const app = Elm.Main.init({
   flags: {
-    theme: setting("theme") as Flags["theme"],
+    theme: theme(setting("theme")),
     systemDark: media.matches,
     blockedUntil: Number.isFinite(blockedUntil) && blockedUntil > 0 ? blockedUntil : null,
     api: import.meta.env.VITE_GITHUB_API ?? "https://api.github.com",
@@ -69,18 +72,18 @@ app.ports.interopFromElm.subscribe((fromElm) => {
       return idb
         .loadUser(fromElm.login)
         .then(({ repos, account }) =>
-          app.ports.interopToElm.send({ tag: "UserLoaded", login: fromElm.login, repos, account } as never),
+          app.ports.interopToElm.send({ tag: "UserLoaded", login: fromElm.login, repos, account }),
         )
         .catch(fail);
 
     case "LoadAccounts":
       return idb
         .loadAccounts()
-        .then((accounts) => app.ports.interopToElm.send({ tag: "AccountsLoaded", accounts } as never))
+        .then((accounts) => app.ports.interopToElm.send({ tag: "AccountsLoaded", accounts }))
         .catch(fail);
 
     case "Write":
-      return idb.write(fromElm.operations as never).catch(fail);
+      return idb.write(fromElm.operations).catch(fail);
 
     case "SaveSetting":
       try {
@@ -93,5 +96,9 @@ app.ports.interopFromElm.subscribe((fromElm) => {
 
     case "OpenUrl":
       return window.open(fromElm.url, "_blank", "noopener");
+
+    // A message Elm can send but this switch doesn't handle fails to type-check here.
+    default:
+      return fromElm satisfies never;
   }
 });
