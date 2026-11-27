@@ -1399,9 +1399,9 @@ view model =
             ]
             [ Sidebar.new
                 |> Sidebar.state model.sidebar SidebarChanged
-                |> Sidebar.header [ viewAccount model ]
+                |> Sidebar.header [ viewLogo model ]
                 |> Sidebar.content (viewFilters model)
-                |> Sidebar.footer [ viewFooter model ]
+                |> Sidebar.footer [ viewFooter model, viewAccount model ]
                 |> Sidebar.rail
                 |> Sidebar.page [ class "min-w-0" ]
                     [ viewTopBar model
@@ -1419,6 +1419,24 @@ view model =
 -- ACCOUNT
 
 
+{-| The app's mark: home is the default user's stars.
+-}
+viewLogo : Model -> Html Msg
+viewLogo model =
+    Sidebar.menu []
+        [ Sidebar.menuItem []
+            [ Sidebar.menuLink [ Sidebar.large, href model.base, class "data-[size=lg]:h-12" ]
+                [ span [ class "flex size-8 shrink-0 items-center justify-center rounded-lg bg-sidebar-primary text-sidebar-primary-foreground" ]
+                    [ Icon.filled "size-4.5!" Icon.logo ]
+                , span [ class "grid flex-1 text-start leading-tight" ]
+                    [ span [ class "truncate text-sm font-semibold" ] [ text "strs" ]
+                    , span [ class "truncate text-xs text-muted-foreground" ] [ text "Starred repos, searchable" ]
+                    ]
+                ]
+            ]
+        ]
+
+
 viewAccount : Model -> Html Msg
 viewAccount model =
     case model.page of
@@ -1431,6 +1449,7 @@ viewAccount model =
                     ]
                 |> DropdownMenu.content (accountMenu model session)
                 |> DropdownMenu.right
+                |> DropdownMenu.alignEnd
                 |> DropdownMenu.toHtml [ class "w-56 max-w-[calc(100vw-2rem)] rounded-lg" ]
 
         Invalid _ ->

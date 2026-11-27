@@ -1,8 +1,8 @@
 module Icon exposing
-    ( Icon, view
+    ( Icon, view, filled
     , search, close, star, fork, archive, refresh, sun, moon, monitor
     , chevronsUpDown, caretRight, caretDown, caretUp, sort, external, userSearch, userX, searchX, reset, clock
-    , hash, code, users
+    , hash, code, users, logo
     )
 
 {-| The app's Phosphor icons, named for what they mean here.
@@ -21,6 +21,15 @@ type alias Icon =
 view : String -> Icon -> Html msg
 view classes icon =
     icon Phosphor.Regular
+        |> Phosphor.withClass ("size-4 shrink-0 " ++ classes)
+        |> Phosphor.toHtml []
+
+
+{-| The icon at the fill weight, for solid marks such as the logo.
+-}
+filled : String -> Icon -> Html msg
+filled classes icon =
+    icon Phosphor.Fill
         |> Phosphor.withClass ("size-4 shrink-0 " ++ classes)
         |> Phosphor.toHtml []
 
@@ -141,3 +150,8 @@ code =
 users : Icon
 users =
     Phosphor.users
+
+
+logo : Icon
+logo =
+    Phosphor.shootingStar
