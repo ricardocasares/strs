@@ -115,10 +115,10 @@ the authenticated `gh` CLI. `dev/mock-github.ts` documents the settings at
 
 ## Logo
 
-The wordmark is "stRs" in Major Mono Display. The lowercase letters are its thin capitals,
-and the uppercase R is its triangle R. `src/fonts/major-mono-display-logo.woff2` holds only
-those glyphs. If the wordmark changes, regenerate it with `bun run font:logo`. The favicon
-is that font's R, which `bun run favicon` draws into `public/favicon.svg`.
+The wordmark is "stRs" in Major Mono Display, whose lowercase letters are thin capitals and
+whose uppercase R has the triangle. Both the wordmark (`src/Logo.elm`) and the favicon
+(`public/favicon.svg`) are that font's outlines, baked into SVG, so the app loads no logo
+font. Keep it that way.
 
 ## TypeScript
 
@@ -130,4 +130,4 @@ pass with the strict settings in `tsconfig.json`.
 - `JSON.parse` and other `any` sources go into `unknown`, which you then narrow.
 - Every switch over a union ends with `default: x satisfies never`. A new variant from Elm
   then fails to type-check until it is handled.
-- Untyped dependencies get declarations in `dev/modules.d.ts` for just what we use.
+- An untyped dependency gets a `declare module` covering just the parts we use.

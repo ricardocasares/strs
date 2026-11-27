@@ -1500,7 +1500,7 @@ viewLogo model =
                 , attribute "aria-label" "strs"
                 , class "flex h-12 items-center rounded-md px-2 text-sidebar-foreground ring-sidebar-ring outline-hidden focus-visible:ring-2"
                 ]
-                [ Logo.view "text-2xl [-webkit-text-stroke:0.75px_currentColor]" ]
+                [ Logo.view ]
             ]
         ]
 

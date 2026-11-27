@@ -1,14 +1,26 @@
 module Logo exposing (view)
 
-{-| The wordmark, set in Major Mono Display. Its lower case are thin capitals and its upper
-case R is the one with the triangle, so "stRs" reads as STRS with that R.
+{-| The wordmark "stRs" in Major Mono Display, drawn as outlines so no font loads for it. The
+font's lower case are thin capitals and its upper case R is the one with the triangle, so it
+reads as STRS with that R.
+
+The outlines are the font's at 24px on a 24px line, with the baseline at the ascender
+(21.6px), thickened by a 0.75px stroke.
+
 -}
 
-import Html exposing (Html, span, text)
-import Html.Attributes exposing (attribute, class)
+import Html exposing (Html)
+import Html.Attributes exposing (attribute)
+import Svg exposing (path, svg)
+import Svg.Attributes exposing (d, fill, height, stroke, strokeWidth, viewBox, width)
 
 
-view : String -> Html msg
-view classes =
-    span [ class ("font-logo leading-none whitespace-nowrap select-none " ++ classes), attribute "aria-hidden" "true" ]
-        [ text "stRs" ]
+view : Html msg
+view =
+    svg [ viewBox "0 0 71.04 24", width "71.04", height "24", attribute "aria-hidden" "true" ]
+        [ path [ d outline, fill "currentColor", stroke "currentColor", strokeWidth "0.75" ] [] ]
+
+
+outline : String
+outline =
+    "M9.24 13.61Q7.2 13.2 5.92 12.71Q4.63 12.22 3.9 11.36Q3.17 10.51 3.17 9.17Q3.17 7.78 3.9 6.72Q4.63 5.66 5.96 5.09Q7.3 4.51 9.05 4.51Q10.73 4.51 12.13 5.22Q13.54 5.93 14.35 7.2Q15.17 8.47 15.17 10.1L14.28 10.1Q14.28 8.69 13.58 7.61Q12.89 6.53 11.69 5.94Q10.49 5.35 9.02 5.35Q7.73 5.35 6.6 5.76Q5.47 6.17 4.76 7.01Q4.06 7.85 4.06 9.12Q4.06 10.27 4.73 10.96Q5.4 11.64 6.48 12Q7.56 12.36 9.5 12.77Q11.47 13.18 12.56 13.55Q13.66 13.92 14.41 14.78Q15.17 15.65 15.17 17.21Q15.17 18.77 14.34 19.84Q13.51 20.9 12.14 21.43Q10.78 21.96 9.17 21.96Q7.18 21.96 5.66 21.22Q4.15 20.47 3.35 19.12Q2.54 17.76 2.54 16.01L3.43 16.01Q3.43 17.54 4.12 18.7Q4.8 19.85 6.1 20.48Q7.39 21.12 9.17 21.12Q11.38 21.12 12.83 20.06Q14.28 19.01 14.28 17.18Q14.28 15.94 13.66 15.26Q13.03 14.59 12.08 14.29Q11.14 13.99 9.24 13.61ZM19.9 4.9L33.38 4.9L33.38 5.78L27.07 5.78L27.07 21.6L26.21 21.6L26.21 5.78L19.9 5.78ZM47.06 15.67L51.31 21.6L38.47 21.6L38.47 4.9L44.98 4.9Q47.06 4.9 48.38 5.64Q49.68 6.36 50.4 7.61Q51.12 8.86 51.12 10.37Q51.12 12.24 49.97 13.72Q48.82 15.19 47.06 15.67ZM45 5.78L39.98 5.78L46.51 14.9Q48.12 14.57 49.18 13.3Q50.23 12.02 50.23 10.37Q50.23 9.05 49.58 7.97Q48.94 6.89 47.76 6.31Q46.7 5.78 45 5.78ZM45.53 14.98L39.36 6.36L39.36 14.98ZM39.36 15.86L39.36 20.71L49.63 20.71L46.13 15.84L45.38 15.86ZM62.52 13.61Q60.48 13.2 59.2 12.71Q57.91 12.22 57.18 11.36Q56.45 10.51 56.45 9.17Q56.45 7.78 57.18 6.72Q57.91 5.66 59.24 5.09Q60.58 4.51 62.33 4.51Q64.01 4.51 65.41 5.22Q66.82 5.93 67.63 7.2Q68.45 8.47 68.45 10.1L67.56 10.1Q67.56 8.69 66.86 7.61Q66.17 6.53 64.97 5.94Q63.77 5.35 62.3 5.35Q61.01 5.35 59.88 5.76Q58.75 6.17 58.04 7.01Q57.34 7.85 57.34 9.12Q57.34 10.27 58.01 10.96Q58.68 11.64 59.76 12Q60.84 12.36 62.78 12.77Q64.75 13.18 65.84 13.55Q66.94 13.92 67.69 14.78Q68.45 15.65 68.45 17.21Q68.45 18.77 67.62 19.84Q66.79 20.9 65.42 21.43Q64.06 21.96 62.45 21.96Q60.46 21.96 58.94 21.22Q57.43 20.47 56.63 19.12Q55.82 17.76 55.82 16.01L56.71 16.01Q56.71 17.54 57.4 18.7Q58.08 19.85 59.38 20.48Q60.67 21.12 62.45 21.12Q64.66 21.12 66.11 20.06Q67.56 19.01 67.56 17.18Q67.56 15.94 66.94 15.26Q66.31 14.59 65.36 14.29Q64.42 13.99 62.52 13.61Z"
