@@ -1,8 +1,29 @@
 module Icon exposing
-    ( Icon, view
-    , search, close, star, fork, archive, refresh, sun, moon
-    , monitor, chevronsUpDown, caretDown, caretUp, sort, userX, searchX, clock
-    , hash, code, users, wideFirst, narrowFirst, shootingStar, fullResync
+    ( Icon
+    , archive
+    , caretDown
+    , caretUp
+    , chevronsUpDown
+    , clock
+    , close
+    , code
+    , fork
+    , fullResync
+    , hash
+    , monitor
+    , moon
+    , narrowFirst
+    , refresh
+    , search
+    , searchX
+    , shootingStar
+    , sort
+    , star
+    , sun
+    , userX
+    , users
+    , view
+    , wideFirst
     )
 
 {-| The app's Phosphor icons, named for what they mean here.

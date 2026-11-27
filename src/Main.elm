@@ -674,7 +674,6 @@ handle msg model =
             , Cmd.none
             )
 
-
         FiltersReset ->
             setFilters (\_ -> Filters.initial) model
 
@@ -1652,6 +1651,7 @@ accountMenu model session =
                                 identity
                     in
                     [ DropdownMenu.separator
+
                     -- The section's label is where syncing stands.
                     , DropdownMenu.label [ span [ class "tabular-nums", attribute "role" "status" ] [ text (syncState model open).label ] ]
                     , DropdownMenu.group
@@ -1860,26 +1860,29 @@ viewFilters model =
                 ]
     in
     { lifecycle =
-        group Icon.archive "Lifecycle"
-        []
-        [ segmented "Lifecycle"
-            LifecycleChosen
-            filters.lifecycle
-            [ ( Any, "All" ), ( Only Active, "Active" ), ( Only Archived, "Archived" ) ]
-        ]
+        group Icon.archive
+            "Lifecycle"
+            []
+            [ segmented "Lifecycle"
+                LifecycleChosen
+                filters.lifecycle
+                [ ( Any, "All" ), ( Only Active, "Active" ), ( Only Archived, "Archived" ) ]
+            ]
     , origin =
-        group Icon.fork "Origin"
-        []
-        [ segmented "Origin"
-            OriginChosen
-            filters.origin
-            [ ( Any, "All" ), ( Only Source, "Sources" ), ( Only Fork, "Forks" ) ]
-        ]
+        group Icon.fork
+            "Origin"
+            []
+            [ segmented "Origin"
+                OriginChosen
+                filters.origin
+                [ ( Any, "All" ), ( Only Source, "Sources" ), ( Only Fork, "Forks" ) ]
+            ]
     , stars =
         -- As elmcn's range slider example, under the section's label: the value beside it is
         -- the badge that clears it, and nothing while every count passes. The scale runs
         -- between the library's fewest and most stars.
-        group Icon.shootingStar "Stargazers"
+        group Icon.shootingStar
+            "Stargazers"
             [ if Filters.isAnyStars filters.stars then
                 text ""
 
@@ -2201,8 +2204,6 @@ shelfOf model =
 
 
 -- FOOTER
-
-
 -- TOP BAR
 
 
@@ -2474,7 +2475,7 @@ viewMain model =
                     Empty.new
                         |> Empty.icon (Icon.view "" Icon.userX)
                         |> Empty.title [ text ("No user named @" ++ Login.toString session.login) ]
-                                |> Empty.toHtml [ class "mt-16" ]
+                        |> Empty.toHtml [ class "mt-16" ]
 
                 ( _, Opening ) ->
                     skeletonList 10
@@ -2518,7 +2519,7 @@ viewShelf model session shelf =
                 Empty.new
                     |> Empty.icon (Icon.view "" Icon.star)
                     |> Empty.title [ text ("@" ++ Login.toString session.login ++ " hasn't starred anything") ]
-                        |> Empty.toHtml [ class "mt-16" ]
+                    |> Empty.toHtml [ class "mt-16" ]
 
             _ ->
                 skeletonList 10
@@ -2548,28 +2549,28 @@ viewShelf model session shelf =
 
 viewHits : Model -> Shelf -> Html Msg
 viewHits model shelf =
-        Html.Keyed.node "ul"
-            [ class "flex flex-col gap-0.5", attribute "aria-label" "Starred repositories" ]
-            (List.map
-                (\repo ->
-                    ( String.fromInt repo.id
-                    , Html.Lazy.lazy5 viewHit (nowBucket model) model.sort model.query (Language.color (Maybe.withDefault "" repo.language)) repo
-                    )
+    Html.Keyed.node "ul"
+        [ class "flex flex-col gap-0.5", attribute "aria-label" "Starred repositories" ]
+        (List.map
+            (\repo ->
+                ( String.fromInt repo.id
+                , Html.Lazy.lazy5 viewHit (nowBucket model) model.sort model.query (Language.color (Maybe.withDefault "" repo.language)) repo
                 )
-                shelf.results.hits
-                ++ (if shelf.results.matches > List.length shelf.results.hits then
-                        [ ( "more-" ++ String.fromInt model.limit
-                          , Html.li [ class "flex flex-col gap-0.5" ]
-                                (Html.node "in-view" [ Html.Events.on "visible" (Decode.succeed MoreRequested) ] []
-                                    :: List.repeat 3 skeletonHit
-                                )
-                          )
-                        ]
-
-                    else
-                        []
-                   )
             )
+            shelf.results.hits
+            ++ (if shelf.results.matches > List.length shelf.results.hits then
+                    [ ( "more-" ++ String.fromInt model.limit
+                      , Html.li [ class "flex flex-col gap-0.5" ]
+                            (Html.node "in-view" [ Html.Events.on "visible" (Decode.succeed MoreRequested) ] []
+                                :: List.repeat 3 skeletonHit
+                            )
+                      )
+                    ]
+
+                else
+                    []
+               )
+        )
 
 
 {-| Relative times only change by the minute, so rows stay cached between ticks.

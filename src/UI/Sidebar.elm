@@ -1016,10 +1016,12 @@ menuButtonAttributes =
 
 
 {-| The tooltip is the button's `::after`, out of the button's own clipping because it is `fixed`, and placed beside the button with CSS anchor positioning, which the button is the implicit anchor of. It only shows from `md` up, with the sidebar collapsed to icons, in browsers with anchor positioning.
+
+The box only exists there, on buttons that have a tooltip: `content-none` otherwise, since every `after:` class turns it on. Elsewhere it would still be laid out, invisible: the panel's `translate` makes it the containing block of `fixed` boxes, so the tooltips of buttons scrolled out of the sidebar's content would hang below the panel and lengthen the page, letting a short page scroll the sticky sidebar away.
 -}
 tooltipClass : String
 tooltipClass =
-    "after:pointer-events-none after:invisible after:fixed after:z-50 after:ms-1 after:-translate-y-1/2 after:rounded-md after:bg-foreground after:px-3 after:py-1.5 after:text-xs after:whitespace-nowrap after:text-background after:opacity-0 after:transition-[opacity,visibility] after:duration-150 after:content-[attr(data-tooltip)] after:[top:anchor(center)] after:[inset-inline-start:anchor(end)] supports-[anchor-name:none]:md:group-data-[collapsible=icon]:data-[tooltip]:hover:after:visible supports-[anchor-name:none]:md:group-data-[collapsible=icon]:data-[tooltip]:hover:after:opacity-100 supports-[anchor-name:none]:md:group-data-[collapsible=icon]:data-[tooltip]:focus-visible:after:visible supports-[anchor-name:none]:md:group-data-[collapsible=icon]:data-[tooltip]:focus-visible:after:opacity-100"
+    "after:content-none after:pointer-events-none after:invisible after:fixed after:z-50 after:ms-1 after:-translate-y-1/2 after:rounded-md after:bg-foreground after:px-3 after:py-1.5 after:text-xs after:whitespace-nowrap after:text-background after:opacity-0 after:transition-[opacity,visibility] after:duration-150 supports-[anchor-name:none]:md:group-data-[collapsible=icon]:data-[tooltip]:after:content-[attr(data-tooltip)] after:[top:anchor(center)] after:[inset-inline-start:anchor(end)] supports-[anchor-name:none]:md:group-data-[collapsible=icon]:data-[tooltip]:hover:after:visible supports-[anchor-name:none]:md:group-data-[collapsible=icon]:data-[tooltip]:hover:after:opacity-100 supports-[anchor-name:none]:md:group-data-[collapsible=icon]:data-[tooltip]:focus-visible:after:visible supports-[anchor-name:none]:md:group-data-[collapsible=icon]:data-[tooltip]:focus-visible:after:opacity-100"
 
 
 {-| A small icon button at the end of an item, over its button, hidden when the sidebar collapses to icons. Give it an icon and an `sr-only` label, and [`showOnHover`](#showOnHover) to show it only when the item is hovered.
