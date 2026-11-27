@@ -379,7 +379,7 @@ keyLabel key =
             "Date starred"
 
         StarCount ->
-            "Stars"
+            "Stargazers"
 
         PushedAt ->
             "Last updated"
