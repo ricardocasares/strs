@@ -8,7 +8,8 @@
     "build": "npm run types && vite build",
     "preview": "vite preview",
     "types": "elm-ts-interop --output src/Main.elm.d.ts",
-    "font:logo": "node dev/subset-logo-font.mjs"
+    "font:logo": "node dev/subset-logo-font.mjs",
+    "favicon": "node dev/favicon.mjs"
   },
   "devDependencies": {
     "@fontsource/major-mono-display": "^5.3.0",
@@ -16,6 +17,7 @@
     "@types/node": "^26.6.11",
     "elm": "^0.19.3-0",
     "elm-ts-interop": "^0.0.8",
+    "opentype.js": "^2.0.0",
     "subset-font": "^2.9.0",
     "tailwindcss": "4.3.3",
     "typescript": "^7.0.2",

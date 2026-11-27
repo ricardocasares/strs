@@ -93,7 +93,8 @@ uses the authenticated `gh` CLI). `dev/mock-github.ts` documents the knobs at
 
 The wordmark is the text "stRs" in Major Mono Display (lower case are its thin capitals,
 upper case R is the triangle R). `src/fonts/major-mono-display-logo.woff2` holds only those
-glyphs; regenerate it with `npm run font:logo` if the wordmark changes.
+glyphs; regenerate it with `npm run font:logo` if the wordmark changes. The favicon is that
+font's R, drawn into `public/favicon.svg` by `npm run favicon`.
 
 ## TypeScript
 
