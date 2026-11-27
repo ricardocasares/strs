@@ -40,7 +40,6 @@ import UI.InputGroup as InputGroup
 import UI.Item as Item
 import UI.Kbd as Kbd
 import UI.Progress as Progress
-import UI.Select as Select
 import UI.Sidebar as Sidebar
 import UI.Skeleton as Skeleton
 import UI.Slider as Slider
@@ -1401,7 +1400,7 @@ view model =
             [ Sidebar.new
                 |> Sidebar.state model.sidebar SidebarChanged
                 |> Sidebar.header [ viewLogo model ]
-                |> Sidebar.content (viewFilters model)
+                |> Sidebar.content (viewOrder model :: viewFilters model)
                 |> Sidebar.footer [ viewFooter model, viewAccount model ]
                 |> Sidebar.rail
                 |> Sidebar.page [ class "min-w-0" ]
@@ -2063,7 +2062,6 @@ viewTopBar model =
         [ div [ class "mx-auto flex h-14 w-full max-w-3xl items-center gap-2 px-2 md:px-4" ]
             [ Sidebar.trigger [ class "size-9 md:size-8" ] model.sidebar SidebarChanged
             , viewSearch model
-            , viewOrder model
             ]
         , viewProgress model
         ]
@@ -2136,24 +2134,31 @@ escapeKey msg =
             )
 
 
-{-| The order of the results, beside the search. On small screens the trigger shows only the
-order's icon, leaving the room to the search.
+{-| How the results are ordered: one of four, the current one marked.
 -}
 viewOrder : Model -> Html Msg
 viewOrder model =
-    Select.new
-        |> Select.id "order"
-        |> Select.onSelect OrderChosen
-        |> Select.value (Just model.order)
-        |> Select.group "Sort by"
+    Sidebar.group []
+        [ Sidebar.groupLabel [ class "text-sm! text-sidebar-foreground!" ] [ text "Sort by" ]
+        , Sidebar.menu []
             (List.map
-                (\order -> Select.item order [ Icon.view "" (orderIcon order), span [] [ text (Filters.orderLabel order) ] ])
+                (\order ->
+                    Sidebar.menuItem []
+                        [ Sidebar.menuButton
+                            ([ onClick (OrderChosen order), attribute "aria-pressed" (boolString (model.order == order)) ]
+                                ++ (if model.order == order then
+                                        [ Sidebar.active ]
+
+                                    else
+                                        []
+                                   )
+                            )
+                            [ Icon.view "" (orderIcon order), span [] [ text (Filters.orderLabel order) ] ]
+                        ]
+                )
                 Filters.orders
             )
-        |> Select.toHtml
-            [ class "shrink-0 max-md:h-9! md:w-44 max-md:[&_[data-slot=select-value]_span]:hidden"
-            , attribute "aria-label" ("Sort: " ++ Filters.orderLabel model.order)
-            ]
+        ]
 
 
 orderIcon : Order -> Icon.Icon
