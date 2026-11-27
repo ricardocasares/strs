@@ -39,6 +39,7 @@ import UI.InputGroup as InputGroup
 import UI.Item as Item
 import UI.Kbd as Kbd
 import UI.Progress as Progress
+import UI.Separator as Separator
 import UI.Sidebar as Sidebar
 import UI.Skeleton as Skeleton
 import UI.Slider as Slider
@@ -2044,8 +2045,11 @@ themeSwitch model =
 viewTopBar : Model -> Html Msg
 viewTopBar model =
     Html.header [ class "sticky top-0 z-20 border-b bg-background/85 backdrop-blur-md supports-[backdrop-filter]:bg-background/70" ]
-        [ div [ class "mx-auto flex h-14 w-full max-w-3xl items-center gap-2 px-2 md:px-4" ]
-            [ Sidebar.trigger [ class "size-9 md:size-8" ] model.sidebar SidebarChanged
+        [ div [ class "flex h-14 w-full items-center gap-2 px-3 md:px-4" ]
+            [ Sidebar.trigger [ class "-ms-1 size-9 md:size-8" ] model.sidebar SidebarChanged
+            , Separator.new
+                |> Separator.vertical
+                |> Separator.toHtml [ class "me-2 self-center! data-[orientation=vertical]:h-4" ]
             , viewSearch model
             ]
         , viewProgress model
