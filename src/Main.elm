@@ -1532,25 +1532,19 @@ tile classes login avatar =
         ]
 
 
+{-| Three sections: whose stars to look at, these stars, and the theme.
+-}
 accountMenu : Model -> Session -> List (DropdownMenu.Item Msg)
 accountMenu model session =
     let
         current =
             Login.toString session.login
 
-        others =
-            List.take 6 model.accounts
-
         action attrs icon label =
             DropdownMenu.item attrs [ Icon.view "" icon, text label ]
-    in
-    (if List.isEmpty others then
-        []
 
-     else
-        [ DropdownMenu.label [ text "Users" ]
-        , DropdownMenu.group
-            (List.map
+        users =
+            List.map
                 (\summary ->
                     DropdownMenu.item
                         [ onClick (BrowseSubmitted (Maybe.withDefault session.login (Login.fromString summary.login)))
@@ -1561,37 +1555,39 @@ accountMenu model session =
                         , DropdownMenu.shortcut [ text (Format.compact summary.total) ]
                         ]
                 )
-                others
-            )
-        , DropdownMenu.separator
-        ]
-    )
-        ++ [ action [ onClick BrowseOpened ] Icon.userSearch "Browse user…"
-           , action [ onClick (ProfileOpened ("https://github.com/" ++ current ++ "?tab=stars")) ] Icon.external "Open on GitHub"
-           ]
-        ++ (case ( session.account, session.library ) of
+                (List.take 6 model.accounts)
+
+        sync =
+            case ( session.account, session.library ) of
                 ( Missing, _ ) ->
                     []
 
                 ( _, Open shelf ) ->
-                    [ DropdownMenu.separator, syncItem model session shelf ]
+                    [ syncItem model session shelf
+                    , action [ onClick (SyncRequested Sync.Rebuild) ] Icon.refresh "Resync all"
+                        |> (if isSyncing session then
+                                DropdownMenu.disabled
+
+                            else
+                                identity
+                           )
+                    ]
 
                 ( _, Opening ) ->
                     []
-           )
-        ++ [ action [ onClick (SyncRequested Sync.Rebuild) ] Icon.refresh "Resync all"
-                |> (if isSyncing session then
-                        DropdownMenu.disabled
-
-                    else
-                        identity
-                   )
-           , DropdownMenu.separator
-           , DropdownMenu.label
-                [ div [ class "flex items-center justify-between ps-0.5 text-sm font-normal text-popover-foreground" ]
-                    [ text "Theme", themeSwitch model ]
-                ]
-           ]
+    in
+    [ DropdownMenu.label [ text "Users" ]
+    , DropdownMenu.group (users ++ [ action [ onClick BrowseOpened ] Icon.userSearch "Browse user…" ])
+    , DropdownMenu.separator
+    , DropdownMenu.label [ text "Stars" ]
+    , DropdownMenu.group
+        (action [ onClick (ProfileOpened ("https://github.com/" ++ current ++ "?tab=stars")) ] Icon.external "Open on GitHub"
+            :: sync
+        )
+    , DropdownMenu.separator
+    , DropdownMenu.label [ text "Theme" ]
+    , DropdownMenu.label [ div [ class "pb-1" ] [ themeSwitch model ] ]
+    ]
 
 
 {-| Syncing is held up for longer than a skeleton should pulse.
@@ -2033,7 +2029,7 @@ themeSwitch model =
             , ToggleGroup.item Interop.System [ Icon.view "" Icon.monitor ] |> ToggleGroup.label "System"
             ]
         |> ToggleGroup.toHtml
-            [ class "rounded-lg border p-0.5 *:size-7 *:min-w-0 *:rounded-md *:px-0 *:text-muted-foreground *:aria-pressed:bg-accent *:aria-pressed:text-foreground"
+            [ class "w-full rounded-lg border p-0.5 *:h-7 *:min-w-0 *:flex-1 *:rounded-md *:px-0 *:text-muted-foreground *:aria-pressed:bg-accent *:aria-pressed:text-foreground"
             , attribute "aria-label" "Theme"
             ]
 
