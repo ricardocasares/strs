@@ -1,8 +1,8 @@
 module Icon exposing
     ( Icon, view
     , search, close, star, fork, archive, refresh, sun, moon, monitor
-    , chevronsUpDown, caretDown, sort, external, userSearch, userX, searchX, reset, clock
-    , code, hash, users, check
+    , chevronsUpDown, caretRight, sort, external, userSearch, userX, searchX, reset, clock
+    , hash
     )
 
 {-| The app's Phosphor icons, named for what they mean here.
@@ -75,9 +75,9 @@ chevronsUpDown =
     Phosphor.caretUpDown
 
 
-caretDown : Icon
-caretDown =
-    Phosphor.caretDown
+caretRight : Icon
+caretRight =
+    Phosphor.caretRight
 
 
 sort : Icon
@@ -115,21 +115,9 @@ clock =
     Phosphor.clock
 
 
-code : Icon
-code =
-    Phosphor.code
-
 
 hash : Icon
 hash =
     Phosphor.hash
 
 
-users : Icon
-users =
-    Phosphor.users
-
-
-check : Icon
-check =
-    Phosphor.check

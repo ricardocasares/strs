@@ -78,7 +78,6 @@ type alias Model =
     , browse : Browse
     , query : String
     , filters : Filters
-    , facet : Facet
     , order : Order
     , limit : Int
     , page : Page
@@ -241,7 +240,6 @@ init json url key =
             , browse = Closed
             , query = ""
             , filters = Filters.initial
-            , facet = Filters.Language
             , order = Relevance
             , limit = pageSize
             , page = Invalid ""
@@ -495,7 +493,6 @@ type Msg
     | StarsChanged ( Float, Float )
     | Picked Facet String
     | Cleared Facet
-    | FacetShown Facet
     | FiltersReset
     | OrderChosen Order
     | MoreRequested
@@ -575,8 +572,6 @@ update msg model =
         Cleared facet ->
             setFilters (Filters.clear facet) model
 
-        FacetShown facet ->
-            ( { model | facet = facet }, Cmd.none )
 
         FiltersReset ->
             setFilters (\_ -> Filters.initial) model
@@ -1597,8 +1592,8 @@ viewFilters model =
                 (List.map (\label -> span [] [ text label ]) [ "0", "10", "100", "1k", "10k", "100k", "∞" ])
             ]
         ]
-    , viewFacets model
     ]
+        ++ viewFacets model
 
 
 segmented : String -> (Choice a -> Msg) -> Choice a -> List ( Choice a, String ) -> Html Msg
@@ -1613,63 +1608,84 @@ segmented label toMsg current options =
         |> ToggleGroup.toHtml [ class "w-full *:flex-1 *:bg-background", attribute "aria-label" label ]
 
 
-viewFacets : Model -> Html Msg
+{-| Languages, topics and users, each a section that starts collapsed. A section's header
+counts its picks, so filters hidden inside a collapsed section are still in view.
+-}
+viewFacets : Model -> List (Html Msg)
 viewFacets model =
     let
-        loading =
+        tallies =
             case model.page of
                 Stars session ->
                     case ( session.account, session.library ) of
                         ( Missing, _ ) ->
-                            False
+                            Nothing
 
                         ( _, Opening ) ->
-                            True
+                            Just Nothing
 
                         ( _, Open shelf ) ->
-                            isFilling shelf
+                            if isFilling shelf then
+                                Just Nothing
+
+                            else
+                                Just (Just shelf.results.tallies)
 
                 Invalid _ ->
-                    False
-
-        tallies =
-            shelfOf model |> Maybe.map (.results >> .tallies)
-
-        empty =
-            not (Filters.hasPicks model.filters)
-                && (case tallies of
-                        Just counted ->
-                            List.all (\facet -> List.isEmpty (tally facet counted)) Filters.facets
-
-                        Nothing ->
-                            True
-                   )
+                    Nothing
     in
-    if loading then
-        Sidebar.group []
-            [ Sidebar.groupLabel [] [ text (Filters.facetLabel model.facet) ]
-            , Sidebar.menu []
-                (List.map
-                    (\width -> Sidebar.menuItem [] [ Sidebar.menuSkeleton [ Sidebar.showIcon, class width ] ])
-                    [ "[--skeleton-width:55%]", "[--skeleton-width:70%]", "[--skeleton-width:45%]", "[--skeleton-width:60%]", "[--skeleton-width:50%]", "[--skeleton-width:65%]" ]
-                )
-            ]
+    case tallies of
+        Just counted ->
+            List.map (viewFacet model counted) Filters.facets
 
-    else
-        case ( tallies, empty ) of
-            ( Just counted, False ) ->
-                viewFacet model model.facet counted
-
-            _ ->
-                text ""
+        Nothing ->
+            []
 
 
-viewFacet : Model -> Facet -> Tallies -> Html Msg
-viewFacet model facet tallies =
+viewFacet : Model -> Maybe Tallies -> Facet -> Html Msg
+viewFacet model tallies facet =
     let
         wanted =
             Filters.picked facet model.filters
 
+        label =
+            Filters.facetLabel facet
+    in
+    Sidebar.group [ class "py-0" ]
+        [ Sidebar.collapsible []
+            (Sidebar.groupTrigger [ class "gap-1.5 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground" ]
+                [ Icon.view "size-3.5! transition-transform duration-200 group-open/collapsible:rotate-90" Icon.caretRight
+                , text label
+                , if Set.isEmpty wanted then
+                    text ""
+
+                  else
+                    span [ class "rounded-md bg-sidebar-accent px-1.5 text-[11px] leading-4 text-sidebar-accent-foreground tabular-nums" ]
+                        [ text (String.fromInt (Set.size wanted)) ]
+                ]
+            )
+            [ case tallies of
+                Just counted ->
+                    viewFacetList facet wanted counted
+
+                Nothing ->
+                    Sidebar.menu [ class "pt-1" ]
+                        (List.map
+                            (\width -> Sidebar.menuItem [] [ Sidebar.menuSkeleton [ Sidebar.showIcon, class width ] ])
+                            [ "[--skeleton-width:55%]", "[--skeleton-width:70%]", "[--skeleton-width:45%]", "[--skeleton-width:60%]" ]
+                        )
+            ]
+        , if Set.isEmpty wanted then
+            text ""
+
+          else
+            Sidebar.groupAction [ onClick (Cleared facet), attribute "aria-label" ("Clear " ++ String.toLower label), class "top-1.5!" ] [ Icon.view "" Icon.close ]
+        ]
+
+
+viewFacetList : Facet -> Set.Set String -> Tallies -> Html Msg
+viewFacetList facet wanted tallies =
+    let
         counted =
             tally facet tallies
 
@@ -1691,27 +1707,18 @@ viewFacet model facet tallies =
         item =
             facetItem facet wanted tallies.avatars
     in
-    Sidebar.group []
-        [ Sidebar.groupLabel [] [ facetMenu model ]
-        , if Set.isEmpty wanted then
-            text ""
+    if List.isEmpty listed then
+        div [ class "px-2 py-1.5 text-xs text-muted-foreground" ] [ text "None" ]
 
-          else
-            Sidebar.groupAction [ onClick (Cleared facet), attribute "aria-label" ("Clear " ++ String.toLower (Filters.facetLabel facet)) ] [ Icon.view "" Icon.close ]
-        , Sidebar.menu []
+    else
+        Sidebar.menu [ class "pt-1" ]
             (List.map item top
                 ++ (if List.isEmpty rest then
                         []
 
                     else
                         [ Sidebar.menuItem []
-                            [ Sidebar.collapsible
-                                (if List.any (Tuple.first >> (\value -> Set.member value wanted)) rest then
-                                    [ Sidebar.defaultOpen ]
-
-                                 else
-                                    []
-                                )
+                            [ Sidebar.collapsible []
                                 (Sidebar.menuTrigger [ class "text-muted-foreground" ]
                                     [ span [] [ text (String.fromInt (List.length rest) ++ " more") ] ]
                                 )
@@ -1720,74 +1727,6 @@ viewFacet model facet tallies =
                         ]
                    )
             )
-        ]
-
-
-{-| The group's label picks which facet the sidebar lists. Each entry says how many of its
-values are picked, since those filters keep applying while another facet is listed.
--}
-facetMenu : Model -> Html Msg
-facetMenu model =
-    let
-        pickedCount facet =
-            Set.size (Filters.picked facet model.filters)
-
-        elsewhere =
-            List.any (\facet -> facet /= model.facet && pickedCount facet > 0) Filters.facets
-    in
-    DropdownMenu.new
-        |> DropdownMenu.id "facet"
-        |> DropdownMenu.trigger
-            [ class "-mx-1 flex h-6 items-center gap-1 rounded-md px-1 outline-hidden ring-sidebar-ring hover:bg-sidebar-accent hover:text-sidebar-accent-foreground focus-visible:ring-2"
-            , attribute "aria-label" ("Filter by " ++ String.toLower (Filters.facetLabel model.facet))
-            ]
-            [ text (Filters.facetLabel model.facet)
-            , Icon.view "size-3!" Icon.caretDown
-            , if elsewhere then
-                span [ class "size-1.5 rounded-full bg-primary", attribute "aria-hidden" "true" ] []
-
-              else
-                text ""
-            ]
-        |> DropdownMenu.content
-            [ DropdownMenu.group
-                (List.map
-                    (\facet ->
-                        DropdownMenu.item
-                            [ onClick (FacetShown facet), attribute "aria-current" (boolString (model.facet == facet)) ]
-                            [ Icon.view "" (facetIcon facet)
-                            , text (Filters.facetLabel facet)
-                            , span [ class "ms-auto flex items-center gap-2 text-xs text-muted-foreground tabular-nums" ]
-                                [ if pickedCount facet > 0 then
-                                    text (String.fromInt (pickedCount facet))
-
-                                  else
-                                    text ""
-                                , if model.facet == facet then
-                                    Icon.view "" Icon.check
-
-                                  else
-                                    span [ class "size-4" ] []
-                                ]
-                            ]
-                    )
-                    Filters.facets
-                )
-            ]
-        |> DropdownMenu.toHtml [ class "w-44" ]
-
-
-facetIcon : Facet -> Icon.Icon
-facetIcon facet =
-    case facet of
-        Filters.Language ->
-            Icon.code
-
-        Filters.Topic ->
-            Icon.hash
-
-        Filters.Owner ->
-            Icon.users
 
 
 facetItem : Facet -> Set.Set String -> Dict String String -> ( String, Int ) -> Html Msg
