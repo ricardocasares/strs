@@ -604,13 +604,17 @@
   }
 }
 
+/* ui.shadcn.com's text settings: the body is `antialiased`, renders for legibility and never
+   fakes a bold. */
 @layer base {
   html {
     /* The sidebar sticks at one viewport tall; overscrolling would pull the page past it. */
-    overscroll-behavior: none;
-    -webkit-tap-highlight-color: transparent;
+    overscroll-behavior-y: none;
+  }
+  body {
+    @apply antialiased;
+    font-synthesis-weight: none;
     text-rendering: optimizeLegibility;
-    -webkit-font-smoothing: antialiased;
   }
 }
 
