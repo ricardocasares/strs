@@ -14,14 +14,15 @@ const spaFallback = (): Plugin => ({
   },
 });
 
-// Elm's debugger keeps every model, and its view of a search index with thousands of
-// entries overflows the stack, so it stays off.
+// Elm's debugger is on in development. It keeps every model, and merging its view of a search
+// index with thousands of entries can overflow the stack: ELM_DEBUG=0 turns it off.
+const debug = process.env.ELM_DEBUG !== "0";
 
 // MOCK_GITHUB=<fixtures dir> serves recorded stars instead of calling api.github.com.
 const fixtures = process.env.MOCK_GITHUB;
 
 export default defineConfig({
   base: "/strs/",
-  plugins: [css(), elm({ debug: false }), spaFallback(), ...(fixtures ? [mockGitHub(fixtures)] : [])],
+  plugins: [css(), elm({ debug }), spaFallback(), ...(fixtures ? [mockGitHub(fixtures)] : [])],
   define: fixtures ? { "import.meta.env.VITE_GITHUB_API": JSON.stringify("/__github") } : {},
 });

@@ -1787,9 +1787,16 @@ viewFacet model tallies facet =
                     facetEntries model facet wanted counted
 
                 Nothing ->
+                    -- Five values with their counts, and the "more" row: the list as it lands.
                     List.map
-                        (\width -> Sidebar.menuItem [] [ Sidebar.menuSkeleton [ Sidebar.showIcon, class width ] ])
-                        [ "[--skeleton-width:55%]", "[--skeleton-width:70%]", "[--skeleton-width:45%]", "[--skeleton-width:60%]" ]
+                        (\width ->
+                            Sidebar.menuItem []
+                                [ Sidebar.menuSkeleton [ Sidebar.showIcon, class width ]
+                                , Sidebar.menuBadge [ class "top-1.5" ] [ Skeleton.view [ class "h-3 w-5" ] ]
+                                ]
+                        )
+                        [ "[--skeleton-width:55%]", "[--skeleton-width:70%]", "[--skeleton-width:45%]", "[--skeleton-width:60%]", "[--skeleton-width:50%]" ]
+                        ++ [ Sidebar.menuItem [] [ Sidebar.menuSkeleton [ Sidebar.showIcon, class "[--skeleton-width:30%]" ] ] ]
             )
         ]
 
