@@ -1858,12 +1858,12 @@ viewFilters model =
                     ("Clear stargazers: " ++ Filters.starsLabel filters.stars)
                     (StarsChanged Filters.anyStars)
             ]
-            [ case shelfOf model |> Maybe.andThen (.index >> Index.starBounds) of
-                Just bounds ->
-                    viewStarsSlider (Filters.stops bounds) filters.stars
-
-                Nothing ->
-                    div [ class "px-1 pt-2 pb-1" ] [ Skeleton.view [ class "h-1 w-full" ] ]
+            [ shelfOf model
+                |> Maybe.andThen (.index >> Index.starBounds)
+                -- Until the library has stars, a scale from none to 100k.
+                |> Maybe.withDefault ( 0, 100000 )
+                |> Filters.stops
+                |> (\scale -> viewStarsSlider scale filters.stars)
             ]
     }
 
