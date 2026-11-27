@@ -18,7 +18,6 @@ const spaFallback = (): Plugin => ({
 const fixtures = process.env.MOCK_GITHUB;
 
 export default defineConfig({
-  base: "/strs/",
   plugins: [css(), elm(), spaFallback(), ...(fixtures ? [mockGitHub(fixtures)] : [])],
   define: fixtures ? { "import.meta.env.VITE_GITHUB_API": JSON.stringify("/__github") } : {},
 });
