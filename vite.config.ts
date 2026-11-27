@@ -17,6 +17,11 @@ const spaFallback = (): Plugin => ({
 // MOCK_GITHUB=<fixtures dir> serves recorded stars instead of calling api.github.com.
 const fixtures = process.env.MOCK_GITHUB;
 
+// The commit being built, which the user menu links to. Null outside a git checkout.
+const git = Bun.spawnSync(["git", "rev-parse", "HEAD"]);
+const commit = git.success ? git.stdout.toString().trim() : null;
+
 export default defineConfig({
   plugins: [css(), elm(), spaFallback(), ...(fixtures ? [mockGitHub(fixtures)] : [])],
+  define: { __COMMIT__: JSON.stringify(commit) },
 });

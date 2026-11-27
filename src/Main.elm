@@ -81,6 +81,9 @@ type alias Model =
     , limit : Int
     , linkVersion : Int
     , page : Page
+
+    -- The commit this build came from, unless it was built outside a git checkout.
+    , commit : Maybe String
     }
 
 
@@ -208,7 +211,7 @@ init json url key =
     let
         flags =
             InteropPorts.decodeFlags json
-                |> Result.withDefault { theme = Nothing, systemDark = False, blockedUntil = Nothing, now = 0, sidebarOpen = Nothing }
+                |> Result.withDefault { theme = Nothing, systemDark = False, blockedUntil = Nothing, now = 0, sidebarOpen = Nothing, commit = Nothing }
 
         now =
             Time.millisToPosix flags.now
@@ -242,6 +245,7 @@ init json url key =
             , limit = pageSize
             , linkVersion = 0
             , page = Invalid ""
+            , commit = flags.commit
             }
 
         ( routed, cmd ) =
@@ -506,6 +510,7 @@ type Msg
     | SidebarChanged Sidebar.State
     | ToastMsg (Toast.Msg Msg)
     | ThemeSelected Theme
+    | CommitOpened String
     | QueryChanged String
     | QueryCleared
     | SearchFocused
@@ -634,6 +639,10 @@ handle msg model =
             ( { model | theme = theme }
             , InteropPorts.fromElm (Interop.SaveSetting { key = "theme", value = Just (Interop.themeToString theme) })
             )
+
+        -- In a new tab, like the repos.
+        CommitOpened sha ->
+            ( model, InteropPorts.fromElm (Interop.OpenTab ("https://github.com/ricardocasares/strs/commit/" ++ sha)) )
 
         QueryChanged query ->
             ( refresh { model | query = query, limit = pageSize }, Cmd.none )
@@ -1673,6 +1682,23 @@ accountMenu model session =
 
         theme value icon label =
             DropdownMenu.radioItem (model.theme == value) [ onClick (ThemeSelected value) ] [ Icon.view "text-muted-foreground" icon, text label ]
+
+        release =
+            case model.commit of
+                Just sha ->
+                    [ DropdownMenu.separator
+                    , DropdownMenu.label [ text "Release" ]
+                    , DropdownMenu.group
+                        [ DropdownMenu.item [ onClick (CommitOpened sha) ]
+                            [ Icon.view "text-muted-foreground" Icon.commit
+                            , text "Commit"
+                            , DropdownMenu.shortcut [ text (String.left 7 sha) ]
+                            ]
+                        ]
+                    ]
+
+                Nothing ->
+                    []
     in
     DropdownMenu.label
         [ div [ class "flex items-center gap-2 py-0.5 text-start font-normal text-popover-foreground" ]
@@ -1692,6 +1718,7 @@ accountMenu model session =
                 , theme Interop.System Icon.monitor "System"
                 ]
            ]
+        ++ release
 
 
 {-| How syncing feels at a glance: fine, working, waiting on GitHub, or stuck.

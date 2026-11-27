@@ -3,8 +3,8 @@ module InteropDefinitions exposing
     , interop, themeToString
     )
 
-{-| The ports. JavaScript only touches browser APIs here: IndexedDB reads and writes, and
-localStorage. What to store, when, and what it means is decided in Elm.
+{-| The ports. JavaScript only touches browser APIs here: IndexedDB reads and writes,
+localStorage, and opening tabs. What to store, when, and what it means is decided in Elm.
 -}
 
 import Json.Encode as Encode
@@ -46,6 +46,7 @@ type FromElm
     = LoadUser String
     | Write (List Operation)
     | SaveSetting { key : String, value : Maybe String }
+    | OpenTab String
 
 
 type ToElm
@@ -60,6 +61,7 @@ type alias Flags =
     , blockedUntil : Maybe Int
     , now : Int
     , sidebarOpen : Maybe Bool
+    , commit : Maybe String
     }
 
 
@@ -89,7 +91,7 @@ storeToString target =
 fromElm : Encoder FromElm
 fromElm =
     TsEncode.union
-        (\loadUser write saveSetting value ->
+        (\loadUser write saveSetting openTab value ->
             case value of
                 LoadUser login ->
                     loadUser login
@@ -99,6 +101,9 @@ fromElm =
 
                 SaveSetting setting ->
                     saveSetting setting
+
+                OpenTab url ->
+                    openTab url
         )
         |> TsEncode.variantObject "LoadUser" [ TsEncode.required "login" identity TsEncode.string ]
         |> TsEncode.variantObject "Write" [ TsEncode.required "operations" identity (TsEncode.list operation) ]
@@ -106,6 +111,7 @@ fromElm =
             [ TsEncode.required "key" .key TsEncode.string
             , TsEncode.required "value" .value (TsEncode.maybe TsEncode.string)
             ]
+        |> TsEncode.variantObject "OpenTab" [ TsEncode.required "url" identity TsEncode.string ]
         |> TsEncode.buildUnion
 
 
@@ -174,3 +180,4 @@ flags =
         |> TsDecode.andMap (TsDecode.field "blockedUntil" (TsDecode.nullable TsDecode.int))
         |> TsDecode.andMap (TsDecode.field "now" TsDecode.int)
         |> TsDecode.andMap (TsDecode.field "sidebarOpen" (TsDecode.nullable TsDecode.bool))
+        |> TsDecode.andMap (TsDecode.field "commit" (TsDecode.nullable TsDecode.string))

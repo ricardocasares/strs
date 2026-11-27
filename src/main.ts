@@ -47,6 +47,7 @@ const app = Elm.Main.init({
     blockedUntil: Number.isFinite(blockedUntil) && blockedUntil > 0 ? blockedUntil : null,
     now: Date.now(),
     sidebarOpen: setting("sidebar") === null ? null : setting("sidebar") === "open",
+    commit: __COMMIT__,
   },
 });
 
@@ -84,6 +85,10 @@ app.ports.interopFromElm.subscribe((fromElm) => {
       } catch {
         // Private mode: settings last for the session.
       }
+      return;
+
+    case "OpenTab":
+      window.open(fromElm.url, "_blank", "noopener");
       return;
 
     // A message Elm can send but this switch doesn't handle fails to type-check here.

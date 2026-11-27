@@ -7,6 +7,7 @@ module Icon exposing
     , clock
     , close
     , code
+    , commit
     , fork
     , fullResync
     , hash
@@ -64,6 +65,11 @@ star =
 fork : Icon
 fork =
     Phosphor.gitFork
+
+
+commit : Icon
+commit =
+    Phosphor.gitCommit
 
 
 archive : Icon

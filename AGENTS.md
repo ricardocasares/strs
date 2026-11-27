@@ -75,7 +75,7 @@ Button.new
 ## Architecture
 
 All behaviour lives in Elm. TypeScript (`src/main.ts`, `src/idb.ts`) only wraps browser APIs:
-IndexedDB, localStorage and the `<in-view>` IntersectionObserver element. Don't move logic
+IndexedDB, localStorage, `window.open` and the `<in-view>` IntersectionObserver element. Don't move logic
 there. When a feature seems to need JavaScript, keep the logic in Elm and expose only the
 browser capability through a typed port.
 
@@ -101,7 +101,9 @@ browser capability through a typed port.
 - `index.html` sets `<base href="%BASE_URL%">` and the app uses relative URLs. Don't set
   `base` in `vite.config.ts` or pass it as a flag. The Pages workflow builds with
   `--base=/strs/`.
-- Pushing to `main` deploys the app to ricardocasares.github.io/strs/.
+- Pushing to `main` deploys the app to ricardocasares.github.io/strs/. `vite.config.ts`
+  reads the commit from `git rev-parse HEAD` and passes it to Elm as a flag. The user
+  menu's Release group links to that commit.
 - Check UI changes in the running app with agent-browser before you call them done.
 
 ## Developing without spending the rate limit
