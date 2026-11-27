@@ -3,7 +3,8 @@
 // It replays recorded pages of stars, so working on the app doesn't spend the real
 // 60-requests-an-hour budget, and it can misbehave on purpose:
 //
-//   /__github/__control?limit=5&window=60   a primary limit of 5 requests per minute
+//   /__github/__control?limit=5&window=60   a primary limit of 5 requests per minute (the
+//                                           default is 5000 an hour, so syncing never stops)
 //   /__github/__control?retryAfter=3        answer the next request with 429, retry-after 3
 //   /__github/__control?hide=7              pretend the 7 newest stars don't exist yet
 //   /__github/__control?latency=400         slow every response down
@@ -30,7 +31,8 @@ type State = {
 
 export const mockGitHub = (dir: string): Plugin => {
   const state: State = {
-    limit: 60,
+    // Plenty by default, like an authenticated client: lower it to test rate limits.
+    limit: 5000,
     window: 3600,
     used: 0,
     resetAt: 0,
