@@ -38,7 +38,6 @@ import UI.DropdownMenu as DropdownMenu
 import UI.Empty as Empty
 import UI.InputGroup as InputGroup
 import UI.Item as Item
-import UI.Label as Label
 import UI.Kbd as Kbd
 import UI.Progress as Progress
 import UI.Separator as Separator
@@ -1848,21 +1847,19 @@ viewFilters model =
             [ ( Any, "All" ), ( Only Source, "Sources" ), ( Only Fork, "Forks" ) ]
         ]
     , stars =
-        -- As elmcn's range slider example: a label with the value beside it, then the slider.
-        -- The value is the badge that clears it, and nothing while every count passes.
-        Sidebar.group []
-            [ Sidebar.groupContent [ class "grid gap-3 px-2 pt-1 pb-2" ]
-                [ div [ class "flex h-5 items-center justify-between gap-2" ]
-                    [ Label.view [] [ Icon.view "" Icon.shootingStar, text "Stargazers" ]
-                    , if Filters.isAnyStars filters.stars then
-                        text ""
+        -- As elmcn's range slider example, under the section's label: the value beside it is
+        -- the badge that clears it, and nothing while every count passes.
+        group Icon.shootingStar "Stargazers"
+            [ if Filters.isAnyStars filters.stars then
+                text ""
 
-                      else
-                        clearBadge (Filters.starsLabel filters.stars)
-                            ("Clear stargazers: " ++ Filters.starsLabel filters.stars)
-                            (StarsChanged ( 0, toFloat Filters.tierCount ))
-                    ]
-                , Slider.new
+              else
+                clearBadge (Filters.starsLabel filters.stars)
+                    ("Clear stargazers: " ++ Filters.starsLabel filters.stars)
+                    (StarsChanged ( 0, toFloat Filters.tierCount ))
+            ]
+            [ div [ class "px-1 pt-2 pb-1" ]
+                [ Slider.new
                     |> Slider.range (Tuple.first (Filters.starsToSlider filters.stars)) (Tuple.second (Filters.starsToSlider filters.stars))
                     |> Slider.onChange StarsChanged
                     |> Slider.min 0
