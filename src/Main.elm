@@ -5,7 +5,7 @@ import Browser.Dom
 import Browser.Events
 import Browser.Navigation as Nav
 import Dict exposing (Dict)
-import Filters exposing (Choice(..), Filters, Order(..))
+import Filters exposing (Choice(..), Facet, Filters, Order(..))
 import Format
 import GitHub
 import Html exposing (Html, div, span, text)
@@ -78,6 +78,7 @@ type alias Model =
     , browse : Browse
     , query : String
     , filters : Filters
+    , facet : Facet
     , order : Order
     , limit : Int
     , page : Page
@@ -158,8 +159,31 @@ type Reason
 type alias Results =
     { matches : Int
     , hits : List Repo
-    , languages : List ( String, Int )
+    , tallies : Tallies
     }
+
+
+{-| How many results each value of each facet would leave, given every other filter.
+-}
+type alias Tallies =
+    { languages : List ( String, Int )
+    , topics : List ( String, Int )
+    , owners : List ( String, Int )
+    , avatars : Dict String String
+    }
+
+
+tally : Facet -> Tallies -> List ( String, Int )
+tally facet tallies =
+    case facet of
+        Filters.Language ->
+            tallies.languages
+
+        Filters.Topic ->
+            tallies.topics
+
+        Filters.Owner ->
+            tallies.owners
 
 
 {-| A user whose stars are saved in this browser.
@@ -217,6 +241,7 @@ init json url key =
             , browse = Closed
             , query = ""
             , filters = Filters.initial
+            , facet = Filters.Language
             , order = Relevance
             , limit = pageSize
             , page = Invalid ""
@@ -326,34 +351,74 @@ search model index =
                         []
                         scores
 
-        passing =
-            List.filter (Tuple.first >> Filters.matches model.filters) scored
+        filters =
+            model.filters
 
-        languages =
-            List.foldl
-                (\( repo, _ ) counts ->
-                    case repo.language of
-                        Just language ->
-                            Dict.update language (Maybe.withDefault 0 >> (+) 1 >> Just) counts
+        satisfies facet repo =
+            let
+                wanted =
+                    Filters.picked facet filters
+            in
+            Set.isEmpty wanted || List.any (\value -> Set.member value wanted) (Filters.valuesOf facet repo)
 
-                        Nothing ->
-                            counts
-                )
-                Dict.empty
-                passing
+        bump value =
+            Dict.update value (Maybe.withDefault 0 >> (+) 1 >> Just)
 
-        chosen =
-            if Set.isEmpty model.filters.languages then
-                passing
+        count condition values dict =
+            if condition then
+                List.foldl bump dict values
 
             else
-                List.filter (\( repo, _ ) -> Maybe.map (\l -> Set.member l model.filters.languages) repo.language == Just True) passing
+                dict
+
+        -- Each facet is counted over the repos that every other facet lets through, so its
+        -- numbers say what picking one more value would leave.
+        tallyRepo (( repo, _ ) as scoredRepo) acc =
+            if Filters.matches filters repo then
+                let
+                    inLanguage =
+                        satisfies Filters.Language repo
+
+                    inTopic =
+                        satisfies Filters.Topic repo
+
+                    inOwner =
+                        satisfies Filters.Owner repo
+                in
+                { languages = count (inTopic && inOwner) (Filters.valuesOf Filters.Language repo) acc.languages
+                , topics = count (inLanguage && inOwner) repo.topics acc.topics
+                , owners = count (inLanguage && inTopic) [ repo.owner ] acc.owners
+                , avatars =
+                    if inLanguage && inTopic then
+                        Dict.insert repo.owner repo.avatar acc.avatars
+
+                    else
+                        acc.avatars
+                , chosen =
+                    if inLanguage && inTopic && inOwner then
+                        scoredRepo :: acc.chosen
+
+                    else
+                        acc.chosen
+                }
+
+            else
+                acc
+
+        folded =
+            List.foldl tallyRepo { languages = Dict.empty, topics = Dict.empty, owners = Dict.empty, avatars = Dict.empty, chosen = [] } scored
+
+        ranked =
+            Dict.toList >> List.sortWith (\( a, x ) ( b, y ) -> compareThen (compare y x) (compare a b))
     in
-    { matches = List.length chosen
-    , hits = List.sortWith (compareBy model.order) chosen |> List.take model.limit |> List.map Tuple.first
-    , languages =
-        Dict.toList languages
-            |> List.sortWith (\( a, x ) ( b, y ) -> compareThen (compare y x) (compare a b))
+    { matches = List.length folded.chosen
+    , hits = List.sortWith (compareBy model.order) folded.chosen |> List.take model.limit |> List.map Tuple.first
+    , tallies =
+        { languages = ranked folded.languages
+        , topics = ranked folded.topics
+        , owners = ranked folded.owners
+        , avatars = folded.avatars
+        }
     }
 
 
@@ -428,8 +493,9 @@ type Msg
     | LifecycleChosen (Choice Lifecycle)
     | OriginChosen (Choice Origin)
     | StarsChanged ( Float, Float )
-    | LanguageToggled String
-    | LanguagesCleared
+    | Picked Facet String
+    | Cleared Facet
+    | FacetShown Facet
     | FiltersReset
     | OrderChosen Order
     | MoreRequested
@@ -503,22 +569,14 @@ update msg model =
         StarsChanged range ->
             setFilters (\filters -> { filters | stars = Filters.starsFromSlider range }) model
 
-        LanguageToggled language ->
-            setFilters
-                (\filters ->
-                    { filters
-                        | languages =
-                            if Set.member language filters.languages then
-                                Set.remove language filters.languages
+        Picked facet value ->
+            setFilters (Filters.pick facet value) model
 
-                            else
-                                Set.insert language filters.languages
-                    }
-                )
-                model
+        Cleared facet ->
+            setFilters (Filters.clear facet) model
 
-        LanguagesCleared ->
-            setFilters (\filters -> { filters | languages = Set.empty }) model
+        FacetShown facet ->
+            ( { model | facet = facet }, Cmd.none )
 
         FiltersReset ->
             setFilters (\_ -> Filters.initial) model
@@ -1506,7 +1564,7 @@ viewFilters model =
     in
     [ Sidebar.group []
         [ Sidebar.groupLabel [] [ text "Filters" ]
-        , if Filters.isInitial { filters | languages = Set.empty } then
+        , if Filters.isInitial filters then
             text ""
 
           else
@@ -1539,7 +1597,7 @@ viewFilters model =
                 (List.map (\label -> span [] [ text label ]) [ "0", "10", "100", "1k", "10k", "100k", "∞" ])
             ]
         ]
-    , viewLanguages model
+    , viewFacets model
     ]
 
 
@@ -1555,12 +1613,9 @@ segmented label toMsg current options =
         |> ToggleGroup.toHtml [ class "w-full *:flex-1 *:bg-background", attribute "aria-label" label ]
 
 
-viewLanguages : Model -> Html Msg
-viewLanguages model =
+viewFacets : Model -> Html Msg
+viewFacets model =
     let
-        selected =
-            model.filters.languages
-
         loading =
             case model.page of
                 Stars session ->
@@ -1577,92 +1632,195 @@ viewLanguages model =
                 Invalid _ ->
                     False
 
+        tallies =
+            shelfOf model |> Maybe.map (.results >> .tallies)
+
         empty =
-            Set.isEmpty selected && (shelfOf model |> Maybe.map (.results >> .languages >> List.isEmpty) |> Maybe.withDefault True)
+            not (Filters.hasPicks model.filters)
+                && (case tallies of
+                        Just counted ->
+                            List.all (\facet -> List.isEmpty (tally facet counted)) Filters.facets
+
+                        Nothing ->
+                            True
+                   )
     in
-    if empty && not loading then
-        text ""
+    if loading then
+        Sidebar.group []
+            [ Sidebar.groupLabel [] [ text (Filters.facetLabel model.facet) ]
+            , Sidebar.menu []
+                (List.map
+                    (\width -> Sidebar.menuItem [] [ Sidebar.menuSkeleton [ Sidebar.showIcon, class width ] ])
+                    [ "[--skeleton-width:55%]", "[--skeleton-width:70%]", "[--skeleton-width:45%]", "[--skeleton-width:60%]", "[--skeleton-width:50%]", "[--skeleton-width:65%]" ]
+                )
+            ]
 
     else
-        viewLanguageGroup model selected
+        case ( tallies, empty ) of
+            ( Just counted, False ) ->
+                viewFacet model model.facet counted
+
+            _ ->
+                text ""
 
 
-viewLanguageGroup : Model -> Set.Set String -> Html Msg
-viewLanguageGroup model selected =
+viewFacet : Model -> Facet -> Tallies -> Html Msg
+viewFacet model facet tallies =
+    let
+        wanted =
+            Filters.picked facet model.filters
+
+        counted =
+            tally facet tallies
+
+        -- Picked values stay listed even when nothing else would match them, so they can be
+        -- unpicked.
+        listed =
+            counted
+                ++ (Set.toList wanted
+                        |> List.filter (\value -> not (List.any (Tuple.first >> (==) value) counted))
+                        |> List.map (\value -> ( value, 0 ))
+                   )
+                |> List.indexedMap Tuple.pair
+                |> List.filter (\( index, ( value, _ ) ) -> index < 108 || Set.member value wanted)
+                |> List.map Tuple.second
+
+        ( top, rest ) =
+            ( List.take 8 listed, List.drop 8 listed )
+
+        item =
+            facetItem facet wanted tallies.avatars
+    in
     Sidebar.group []
-        [ Sidebar.groupLabel [] [ text "Languages" ]
-        , if Set.isEmpty selected then
+        [ Sidebar.groupLabel [] [ facetMenu model ]
+        , if Set.isEmpty wanted then
             text ""
 
           else
-            Sidebar.groupAction [ onClick LanguagesCleared, attribute "aria-label" "Clear languages" ] [ Icon.view "" Icon.close ]
-        , case shelfOf model |> Maybe.andThen (\shelf -> if isFilling shelf then Nothing else Just shelf) of
-            Just shelf ->
-                let
-                    counted =
-                        shelf.results.languages
+            Sidebar.groupAction [ onClick (Cleared facet), attribute "aria-label" ("Clear " ++ String.toLower (Filters.facetLabel facet)) ] [ Icon.view "" Icon.close ]
+        , Sidebar.menu []
+            (List.map item top
+                ++ (if List.isEmpty rest then
+                        []
 
-                    missing =
-                        Set.toList selected
-                            |> List.filter (\language -> not (List.any (Tuple.first >> (==) language) counted))
-                            |> List.map (\language -> ( language, 0 ))
+                    else
+                        [ Sidebar.menuItem []
+                            [ Sidebar.collapsible
+                                (if List.any (Tuple.first >> (\value -> Set.member value wanted)) rest then
+                                    [ Sidebar.defaultOpen ]
 
-                    all =
-                        counted ++ missing
-
-                    ( top, rest ) =
-                        ( List.take 8 all, List.drop 8 all )
-                in
-                Sidebar.menu []
-                    (List.map (languageItem selected) top
-                        ++ (if List.isEmpty rest then
-                                []
-
-                            else
-                                [ Sidebar.menuItem []
-                                    [ Sidebar.collapsible
-                                        (if List.any (Tuple.first >> (\l -> Set.member l selected)) rest then
-                                            [ Sidebar.defaultOpen ]
-
-                                         else
-                                            []
-                                        )
-                                        (Sidebar.menuTrigger [ class "text-muted-foreground" ]
-                                            [ span [] [ text (String.fromInt (List.length rest) ++ " more") ] ]
-                                        )
-                                        [ Sidebar.menu [ class "mt-1" ] (List.map (languageItem selected) rest) ]
-                                    ]
-                                ]
-                           )
-                    )
-
-            Nothing ->
-                Sidebar.menu []
-                    (List.map
-                        (\width -> Sidebar.menuItem [] [ Sidebar.menuSkeleton [ Sidebar.showIcon, class width ] ])
-                        [ "[--skeleton-width:55%]", "[--skeleton-width:70%]", "[--skeleton-width:45%]", "[--skeleton-width:60%]", "[--skeleton-width:50%]", "[--skeleton-width:65%]" ]
-                    )
+                                 else
+                                    []
+                                )
+                                (Sidebar.menuTrigger [ class "text-muted-foreground" ]
+                                    [ span [] [ text (String.fromInt (List.length rest) ++ " more") ] ]
+                                )
+                                [ Sidebar.menu [ class "mt-1" ] (List.map item rest) ]
+                            ]
+                        ]
+                   )
+            )
         ]
 
 
-languageItem : Set.Set String -> ( String, Int ) -> Html Msg
-languageItem selected ( language, count ) =
+{-| The group's label picks which facet the sidebar lists. Each entry says how many of its
+values are picked, since those filters keep applying while another facet is listed.
+-}
+facetMenu : Model -> Html Msg
+facetMenu model =
     let
-        isSelected =
-            Set.member language selected
+        pickedCount facet =
+            Set.size (Filters.picked facet model.filters)
+
+        elsewhere =
+            List.any (\facet -> facet /= model.facet && pickedCount facet > 0) Filters.facets
+    in
+    DropdownMenu.new
+        |> DropdownMenu.id "facet"
+        |> DropdownMenu.trigger
+            [ class "-mx-1 flex h-6 items-center gap-1 rounded-md px-1 outline-hidden ring-sidebar-ring hover:bg-sidebar-accent hover:text-sidebar-accent-foreground focus-visible:ring-2"
+            , attribute "aria-label" ("Filter by " ++ String.toLower (Filters.facetLabel model.facet))
+            ]
+            [ text (Filters.facetLabel model.facet)
+            , Icon.view "size-3!" Icon.caretDown
+            , if elsewhere then
+                span [ class "size-1.5 rounded-full bg-primary", attribute "aria-hidden" "true" ] []
+
+              else
+                text ""
+            ]
+        |> DropdownMenu.content
+            [ DropdownMenu.group
+                (List.map
+                    (\facet ->
+                        DropdownMenu.item
+                            [ onClick (FacetShown facet), attribute "aria-current" (boolString (model.facet == facet)) ]
+                            [ Icon.view "" (facetIcon facet)
+                            , text (Filters.facetLabel facet)
+                            , span [ class "ms-auto flex items-center gap-2 text-xs text-muted-foreground tabular-nums" ]
+                                [ if pickedCount facet > 0 then
+                                    text (String.fromInt (pickedCount facet))
+
+                                  else
+                                    text ""
+                                , if model.facet == facet then
+                                    Icon.view "" Icon.check
+
+                                  else
+                                    span [ class "size-4" ] []
+                                ]
+                            ]
+                    )
+                    Filters.facets
+                )
+            ]
+        |> DropdownMenu.toHtml [ class "w-44" ]
+
+
+facetIcon : Facet -> Icon.Icon
+facetIcon facet =
+    case facet of
+        Filters.Language ->
+            Icon.code
+
+        Filters.Topic ->
+            Icon.hash
+
+        Filters.Owner ->
+            Icon.users
+
+
+facetItem : Facet -> Set.Set String -> Dict String String -> ( String, Int ) -> Html Msg
+facetItem facet wanted avatars ( value, count ) =
+    let
+        isPicked =
+            Set.member value wanted
     in
     Sidebar.menuItem []
         [ Sidebar.menuButton
-            ([ onClick (LanguageToggled language), attribute "aria-pressed" (boolString isSelected) ]
-                ++ (if isSelected then
+            ([ onClick (Picked facet value), attribute "aria-pressed" (boolString isPicked) ]
+                ++ (if isPicked then
                         [ Sidebar.active ]
 
                     else
                         []
                    )
             )
-            [ languageDot language "size-2.5"
-            , span [] [ text language ]
+            [ case facet of
+                Filters.Language ->
+                    span [ class "flex size-4 shrink-0 items-center justify-center" ] [ languageDot value "size-2.5" ]
+
+                Filters.Topic ->
+                    Icon.view "text-muted-foreground" Icon.hash
+
+                Filters.Owner ->
+                    case Dict.get value avatars of
+                        Just url ->
+                            Html.img [ src (Profile.avatar 32 url), alt "", class "size-4 shrink-0 rounded-full bg-muted", attribute "loading" "lazy" ] []
+
+                        Nothing ->
+                            span [ class "size-4 shrink-0 rounded-full bg-muted" ] []
+            , span [] [ text value ]
             ]
         , Sidebar.menuBadge [ class "text-muted-foreground" ] [ text (Format.compact count) ]
         ]

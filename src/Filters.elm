@@ -1,5 +1,6 @@
 module Filters exposing
     ( Filters, Choice(..), initial, isInitial, matches
+    , Facet(..), facets, facetLabel, picked, pick, clear, valuesOf, hasPicks
     , Stars, starsFromSlider, starsToSlider, starsLabel, tierCount, isAnyStars
     , Order(..), orders, orderLabel
     )
@@ -18,6 +19,8 @@ type alias Filters =
     , origin : Choice Origin
     , stars : Stars
     , languages : Set String
+    , topics : Set String
+    , owners : Set String
     }
 
 
@@ -34,6 +37,8 @@ initial =
     , origin = Any
     , stars = anyStars
     , languages = Set.empty
+    , topics = Set.empty
+    , owners = Set.empty
     }
 
 
@@ -42,7 +47,7 @@ isInitial filters =
     filters == initial
 
 
-{-| Everything but the languages, which are counted over the repos that pass the rest.
+{-| Everything but the facets, which are counted over the repos that pass the rest.
 -}
 matches : Filters -> Repo -> Bool
 matches filters repo =
@@ -59,6 +64,124 @@ choose choice value =
 
         Only wanted ->
             wanted == value
+
+
+
+-- FACETS
+
+
+{-| A property repos are counted by in the sidebar, and narrowed to by picking values. Picking
+several values of one facet widens to any of them; picking in several facets narrows to all.
+-}
+type Facet
+    = Language
+    | Topic
+    | Owner
+
+
+{-| Every facet, in the order the sidebar offers them. Built through a `case`, so a new facet
+can't be left out.
+-}
+facets : List Facet
+facets =
+    let
+        next list =
+            case list of
+                [] ->
+                    next [ Language ]
+
+                Language :: _ ->
+                    next (Topic :: list)
+
+                Topic :: _ ->
+                    next (Owner :: list)
+
+                Owner :: _ ->
+                    list
+    in
+    List.reverse (next [])
+
+
+facetLabel : Facet -> String
+facetLabel facet =
+    case facet of
+        Language ->
+            "Languages"
+
+        Topic ->
+            "Topics"
+
+        Owner ->
+            "Users"
+
+
+picked : Facet -> Filters -> Set String
+picked facet filters =
+    case facet of
+        Language ->
+            filters.languages
+
+        Topic ->
+            filters.topics
+
+        Owner ->
+            filters.owners
+
+
+setPicked : Facet -> Set String -> Filters -> Filters
+setPicked facet values filters =
+    case facet of
+        Language ->
+            { filters | languages = values }
+
+        Topic ->
+            { filters | topics = values }
+
+        Owner ->
+            { filters | owners = values }
+
+
+{-| Picks a value, or unpicks it when it's picked already.
+-}
+pick : Facet -> String -> Filters -> Filters
+pick facet value filters =
+    let
+        current =
+            picked facet filters
+    in
+    setPicked facet
+        (if Set.member value current then
+            Set.remove value current
+
+         else
+            Set.insert value current
+        )
+        filters
+
+
+clear : Facet -> Filters -> Filters
+clear facet =
+    setPicked facet Set.empty
+
+
+hasPicks : Filters -> Bool
+hasPicks filters =
+    List.any (\facet -> not (Set.isEmpty (picked facet filters))) facets
+
+
+{-| A repo's values for a facet: its language, its topics, its owner.
+-}
+valuesOf : Facet -> Repo -> List String
+valuesOf facet repo =
+    case facet of
+        Language ->
+            Maybe.withDefault [] (Maybe.map List.singleton repo.language)
+
+        Topic ->
+            repo.topics
+
+        Owner ->
+            [ repo.owner ]
 
 
 
