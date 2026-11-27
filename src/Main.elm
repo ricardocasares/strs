@@ -1637,27 +1637,27 @@ viewFilters model =
         filters =
             model.filters
 
-        group label aside content =
+        group icon label aside content =
             Sidebar.group []
-                [ Sidebar.groupLabel [ class "justify-between pe-1" ] (text label :: aside)
+                [ Sidebar.groupLabel [ class "justify-between pe-1" ] (sectionTitle icon label :: aside)
                 , Sidebar.groupContent [ class "px-1" ] content
                 ]
     in
-    [ group "Lifecycle"
+    [ group Icon.archive "Lifecycle"
         []
         [ segmented "Lifecycle"
             LifecycleChosen
             filters.lifecycle
             [ ( Any, "All" ), ( Only Active, "Active" ), ( Only Archived, "Archived" ) ]
         ]
-    , group "Origin"
+    , group Icon.fork "Origin"
         []
         [ segmented "Origin"
             OriginChosen
             filters.origin
             [ ( Any, "All" ), ( Only Source, "Sources" ), ( Only Fork, "Forks" ) ]
         ]
-    , group "Stars"
+    , group Icon.star "Stars"
         [ if Filters.isAnyStars filters.stars then
             span [ class "font-normal text-sidebar-foreground tabular-nums" ] [ text (Filters.starsLabel filters.stars) ]
 
@@ -1680,6 +1680,26 @@ viewFilters model =
             ]
         ]
     ]
+
+
+{-| A group label's icon and text.
+-}
+sectionTitle : Icon.Icon -> String -> Html msg
+sectionTitle icon label =
+    span [ class "flex items-center gap-2" ] [ Icon.view "" icon, text label ]
+
+
+facetIcon : Facet -> Icon.Icon
+facetIcon facet =
+    case facet of
+        Filters.Language ->
+            Icon.code
+
+        Filters.Topic ->
+            Icon.hash
+
+        Filters.Owner ->
+            Icon.users
 
 
 {-| A small primary badge beside a group label: what's set there, and a cross that clears it.
@@ -1759,7 +1779,7 @@ viewFacet model tallies facet =
     in
     Sidebar.group []
         [ Sidebar.groupLabel [ class "justify-between pe-1" ]
-            [ text (Filters.facetLabel facet)
+            [ sectionTitle (facetIcon facet) (Filters.facetLabel facet)
             , if Set.isEmpty wanted then
                 text ""
 
@@ -2112,7 +2132,7 @@ escapeKey msg =
 viewOrder : Model -> Html Msg
 viewOrder model =
     Sidebar.group []
-        [ Sidebar.groupLabel [] [ text "Sort by" ]
+        [ Sidebar.groupLabel [] [ sectionTitle Icon.sort "Sort by" ]
         , Sidebar.menu []
             (List.map
                 (\order ->
