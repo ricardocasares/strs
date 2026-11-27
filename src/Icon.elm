@@ -148,4 +148,4 @@ warning =
 
 fullResync : Icon
 fullResync =
-    Phosphor.cloudArrowDown
+    Phosphor.cloudCheck

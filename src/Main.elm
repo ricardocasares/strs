@@ -1646,11 +1646,11 @@ accountMenu model session =
                     , DropdownMenu.group
                         [ case (syncState model open).action of
                             Just ( _, msg ) ->
-                                item [ onClick msg ] Icon.refresh "Now"
+                                item [ onClick msg ] Icon.clock "Now"
                                     |> whenIdle
 
                             Nothing ->
-                                item [] Icon.refresh "Now"
+                                item [] Icon.clock "Now"
                                     |> DropdownMenu.disabled
                         , item [ onClick (SyncRequested Sync.Rebuild) ] Icon.fullResync "Full sync"
                             |> whenIdle
