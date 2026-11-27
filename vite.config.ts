@@ -16,7 +16,9 @@ const spaFallback = (): Plugin => ({
 
 // Elm's debugger is on in development; ELM_DEBUG=0 turns it off. It walks lists and arrays in
 // the model one stack frame per element, so large collections in the model are Dicts.
-const debug = process.env.ELM_DEBUG !== "0";
+// Leave it undefined otherwise: the plugin's default keeps it out of builds, which an explicit
+// `true` would override, and with it `--optimize`.
+const debug = process.env.ELM_DEBUG === "0" ? false : undefined;
 
 // MOCK_GITHUB=<fixtures dir> serves recorded stars instead of calling api.github.com.
 const fixtures = process.env.MOCK_GITHUB;
