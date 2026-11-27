@@ -1663,15 +1663,9 @@ viewFilters model =
 
           else
             -- The range, as a badge that resets it.
-            Html.button
-                ([ type_ "button"
-                 , onClick (StarsChanged ( 0, toFloat Filters.tierCount ))
-                 , attribute "aria-label" ("Clear stars: " ++ Filters.starsLabel filters.stars)
-                 ]
-                    ++ Badge.toAttributes (Badge.new |> Badge.text "")
-                    ++ [ class "cursor-pointer pe-1.5 tabular-nums hover:bg-primary/85" ]
-                )
-                [ text (Filters.starsLabel filters.stars), Icon.view "" Icon.close ]
+            clearBadge (Filters.starsLabel filters.stars)
+                ("Clear stars: " ++ Filters.starsLabel filters.stars)
+                (StarsChanged ( 0, toFloat Filters.tierCount ))
         ]
         [ div [ class "px-1 pt-1" ]
             [ Slider.new
@@ -1686,6 +1680,18 @@ viewFilters model =
             ]
         ]
     ]
+
+
+{-| A small primary badge beside a group label: what's set there, and a cross that clears it.
+-}
+clearBadge : String -> String -> Msg -> Html Msg
+clearBadge content label msg =
+    Html.button
+        ([ type_ "button", onClick msg, attribute "aria-label" label ]
+            ++ Badge.toAttributes (Badge.new |> Badge.text "")
+            ++ [ class "h-4! cursor-pointer gap-0.5! px-1.5! text-[10px]! leading-none tabular-nums hover:bg-primary/85 [&_svg[class]]:size-2.5!" ]
+        )
+        [ text content, Icon.view "" Icon.close ]
 
 
 {-| Exactly one option is always pressed: picking another moves the press.
@@ -1758,17 +1764,9 @@ viewFacet model tallies facet =
                 text ""
 
               else
-                Html.button
-                    ([ type_ "button"
-                     , onClick (Cleared facet)
-                     , attribute "aria-label" ("Clear " ++ String.toLower (Filters.facetLabel facet))
-                     ]
-                        ++ Badge.toAttributes (Badge.new |> Badge.text "")
-                        ++ [ class "cursor-pointer pe-1.5 tabular-nums hover:bg-primary/85" ]
-                    )
-                    [ text (String.fromInt (Set.size wanted))
-                    , Icon.view "" Icon.close
-                    ]
+                clearBadge (String.fromInt (Set.size wanted))
+                    ("Clear " ++ String.toLower (Filters.facetLabel facet))
+                    (Cleared facet)
             ]
         , Sidebar.menu []
             (case tallies of
