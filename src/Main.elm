@@ -121,6 +121,9 @@ type alias Shelf =
     , cursor : Sync.Cursor
     , sync : Sync
     , results : Results
+
+    -- When the results were last worked out, so a sync can space out redoing them.
+    , shownAt : Time.Posix
     }
 
 
@@ -336,25 +339,65 @@ isDark model =
 
 search : Model -> Index -> Results
 search model index =
+    case Index.score model.query index of
+        Nothing ->
+            if Filters.isInitial model.filters then
+                everything model index
+
+            else
+                narrow model (List.map (\repo -> ( repo, 0 )) (Index.toList index))
+
+        Just scores ->
+            narrow model
+                (Dict.foldl
+                    (\id relevance acc ->
+                        case Index.get id index of
+                            Just repo ->
+                                ( repo, relevance ) :: acc
+
+                            Nothing ->
+                                acc
+                    )
+                    []
+                    scores
+                )
+
+
+{-| With no query and no filters every star is a result, and each facet's counts are the
+library's own, which the index keeps up to date: nothing to tally.
+-}
+everything : Model -> Index -> Results
+everything model index =
     let
-        scored =
-            case Index.score model.query index of
-                Nothing ->
-                    List.map (\repo -> ( repo, 0 )) (Index.toList index)
+        counts =
+            Index.facets index
+    in
+    { matches = Index.size index
+    , hits =
+        List.map (\repo -> ( repo, 0 )) (Index.toList index)
+            |> List.sortWith (compareBy model.sort)
+            |> List.take model.limit
+            |> List.map Tuple.first
+    , tallies =
+        { languages = ranked counts.languages
+        , topics = ranked counts.topics
+        , owners = ranked counts.owners
+        }
+    }
 
-                Just scores ->
-                    Dict.foldl
-                        (\id relevance acc ->
-                            case Index.get id index of
-                                Just repo ->
-                                    ( repo, relevance ) :: acc
 
-                                Nothing ->
-                                    acc
-                        )
-                        []
-                        scores
+{-| Most first, then by name.
+-}
+ranked : Dict String Int -> List ( String, Int )
+ranked =
+    Dict.toList >> List.sortWith (\( a, x ) ( b, y ) -> compareThen (compare y x) (compare a b))
 
+
+{-| The scored repos that every filter lets through, with each facet counted over them.
+-}
+narrow : Model -> List ( Repo, Float ) -> Results
+narrow model scored =
+    let
         filters =
             model.filters
 
@@ -405,9 +448,6 @@ search model index =
 
         folded =
             List.foldl tallyRepo { languages = Dict.empty, topics = Dict.empty, owners = Dict.empty, chosen = [] } scored
-
-        ranked =
-            Dict.toList >> List.sortWith (\( a, x ) ( b, y ) -> compareThen (compare y x) (compare a b))
     in
     { matches = List.length folded.chosen
     , hits = List.sortWith (compareBy model.sort) folded.chosen |> List.take model.limit |> List.map Tuple.first
@@ -479,7 +519,20 @@ compareThen first second =
 -}
 refresh : Model -> Model
 refresh model =
-    mapShelf (\_ shelf -> { shelf | results = search model shelf.index }) model
+    mapShelf (\_ shelf -> { shelf | results = search model shelf.index, shownAt = model.now }) model
+
+
+{-| While a sync streams pages in, the results are redone for every page until they fill the
+screen, then about once a second: redoing them walks the whole library, and on a slow phone
+doing that for every page keeps the app from answering taps.
+-}
+refreshWhileSyncing : Shelf -> Model -> Model
+refreshWhileSyncing shelf model =
+    if shelf.results.matches < model.limit || Time.posixToMillis model.now - Time.posixToMillis shelf.shownAt >= 1000 then
+        refresh model
+
+    else
+        model
 
 
 mapShelf : (Session -> Shelf -> Shelf) -> Model -> Model
@@ -530,6 +583,7 @@ type Msg
     | GotPage Login Sync.Job ( GitHub.Response (List Repo), Time.Posix )
     | GotProfile Login ( GitHub.Response (Time.Posix -> Profile), Time.Posix )
     | Resumed Login Time.Posix
+    | IndexingDue Login
     | VisibilityChanged Browser.Events.Visibility
 
 
@@ -707,6 +761,9 @@ handle msg model =
         Resumed login until ->
             withSessionOf login (resume until) model
 
+        IndexingDue login ->
+            withSessionOf login indexMore model
+
         VisibilityChanged Browser.Events.Visible ->
             withSession (startIfDue (10 * 60 * 1000)) model
 
@@ -785,6 +842,7 @@ opened session loaded model =
             , cursor = Maybe.map .cursor account |> Maybe.withDefault Sync.Fresh
             , sync = Idle
             , results = search model index
+            , shownAt = model.now
             }
 
         next =
@@ -800,6 +858,42 @@ opened session loaded model =
             }
     in
     startIfDue (5 * 60 * 1000) next { model | page = Stars next }
+        |> Tuple.mapSecond
+            (\cmd ->
+                if Index.pending index then
+                    Cmd.batch [ cmd, indexSoon session.login ]
+
+                else
+                    cmd
+            )
+
+
+{-| Indexes the next batch of stars for search, and asks for another while some are left.
+Each batch runs on its own, short enough that taps and scrolling never wait on it.
+-}
+indexMore : Session -> Model -> ( Model, Cmd Msg )
+indexMore session model =
+    case session.library of
+        Open shelf ->
+            let
+                index =
+                    Index.settle 50 shelf.index
+            in
+            ( setSession { session | library = Open { shelf | index = index } } model
+            , if Index.pending index then
+                indexSoon session.login
+
+              else
+                Cmd.none
+            )
+
+        Opening ->
+            ( model, Cmd.none )
+
+
+indexSoon : Login -> Cmd Msg
+indexSoon login =
+    Task.perform (\_ -> IndexingDue login) (Process.sleep 0)
 
 
 storedRepo : Decoder ( Repo, Time.Posix )
@@ -1224,7 +1318,7 @@ step run next session shelf model =
             in
             fetch session saved { run | job = job, attempt = 0, pace = paced model.now run.pace } model
                 |> Tuple.mapSecond (\fetchCmd -> Cmd.batch [ cmd, fetchCmd ])
-                |> Tuple.mapFirst refresh
+                |> Tuple.mapFirst (refreshWhileSyncing shelf)
 
         Sync.Done finish save ->
             let
@@ -1299,17 +1393,25 @@ store save session shelf model =
             }
     in
     ( saved
-    , InteropPorts.fromElm
-        (Interop.Write
-            (List.map (\repo -> Interop.Put Interop.Repos (Repo.encode { login = login, seen = save.seen } repo)) save.repos
-                ++ [ Interop.Put Interop.Accounts (encodeAccount session.account saved model) ]
+    , Cmd.batch
+        [ InteropPorts.fromElm
+            (Interop.Write
+                (List.map (\repo -> Interop.Put Interop.Repos (Repo.encode { login = login, seen = save.seen } repo)) save.repos
+                    ++ [ Interop.Put Interop.Accounts (encodeAccount session.account saved model) ]
+                )
             )
-        )
+
+        -- A batch already under way picks the new repos up.
+        , if Index.pending shelf.index then
+            Cmd.none
+
+          else
+            indexSoon session.login
+        ]
     )
 
 
-{-| After a full sync, the stars it didn't see again were removed from GitHub. The index is
-rebuilt from scratch too, so its field averages are exact again.
+{-| After a full sync, the stars it didn't see again were removed from GitHub.
 -}
 prune_ : Time.Posix -> Session -> Shelf -> ( Shelf, Cmd Msg, Int )
 prune_ run session shelf =
@@ -1328,7 +1430,7 @@ prune_ run session shelf =
 
         kept =
             { shelf
-                | index = Index.fromList (Index.toList (Index.remove stale shelf.index))
+                | index = Index.remove stale shelf.index
                 , seen = List.foldl Dict.remove shelf.seen stale
             }
     in
@@ -1944,6 +2046,8 @@ viewStarsSlider scale stars =
             |> Slider.min 0
             |> Slider.max (toFloat (max 1 (List.length scale - 1)))
             |> Slider.step 1
+            |> Slider.labels [ "Fewest stargazers", "Most stargazers" ]
+            |> Slider.valueText (\position -> Format.compact (Maybe.withDefault 0 (List.head (List.drop (round position) scale))))
             |> Slider.toHtml [ attribute "aria-label" "Stargazers" ]
         , case ends of
             ( Just fewest, Just most ) ->
@@ -2588,9 +2692,9 @@ viewHits model shelf =
             ++ (if shelf.results.matches > List.length shelf.results.hits then
                     [ ( "more-" ++ String.fromInt model.limit
                       , Html.li [ class "flex flex-col gap-0.5" ]
-                            (Html.node "in-view" [ Html.Events.on "visible" (Decode.succeed MoreRequested) ] []
-                                :: List.repeat 3 skeletonHit
-                            )
+                            [ Html.node "in-view" [ Html.Events.on "visible" (Decode.succeed MoreRequested) ] []
+                            , skeletonList 3
+                            ]
                       )
                     ]
 

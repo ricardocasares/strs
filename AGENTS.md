@@ -43,6 +43,9 @@ shadcn/ui, elmcn is not a package. The CLI copies a component's source into
   collections as `Dict`s, not `List`s or `Array`s.
 - Call `elm()` in `vite.config.ts` with no options. Its defaults turn the debugger on in dev
   and keep it out of production.
+- Keep each main-thread task short, so a slow phone keeps answering taps. Lighthouse runs
+  mobile at a 4× slower CPU and counts every task over 50ms. Work that walks the whole
+  library either runs in batches (`Index.settle`) or is spaced out (`refreshWhileSyncing`).
 
 ## elmcn components
 
@@ -85,7 +88,10 @@ browser capability through a typed port.
 - `Sync.elm` does incremental sync as pure functions. A full sync walks every page and
   prunes. A delta sync stops at the first star already known. The cursor is saved with every
   page.
-- `Index.elm` is BM25F with prefix matching. `Tokens.elm` splits words and highlights matches.
+- `Index.elm` is BM25F with prefix matching. Length normalisation happens when a query is
+  scored, so the index never needs rebuilding. New repos are listed at once but indexed for
+  search in batches, and the index keeps facet counts for the unfiltered view. `Tokens.elm`
+  splits words and highlights matches.
 - `Link.elm` keeps the URL's query string in sync with the app. The URL is rewritten with
   `replaceUrl` once typing pauses, never on each keystroke.
 - `Main.elm` holds the state machine (`Sync`: `Idle | Running | Paused | Stalled`), the

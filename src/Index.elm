@@ -1,7 +1,9 @@
 module Index exposing
     ( Index, empty, fromList
     , upsert, remove
+    , pending, settle
     , size, get, ids, toList, avatar, starBounds
+    , Facets, facets
     , score
     )
 
@@ -12,29 +14,54 @@ so a word in a repo's name outranks the same word buried in a long description. 
 word must match, exactly or as the start of a longer word, which is what narrowing a list as
 you type expects.
 
-Field averages move as repos come in. `upsert` normalises with the averages of the moment,
-which is close enough while a sync streams pages in; `fromList` rebuilds exactly.
+The index keeps each term's raw count per field, and normalises by field length when a query
+is scored, against the averages of the whole library at that moment. So adding or removing
+repos never leaves the others normalised against averages that have since moved, and nothing
+ever needs rebuilding.
+
+Repos join the library at once, so lists and filters see them straight away, but they are
+indexed for search a batch at a time with `settle`. That keeps a page of stars, or a whole
+library read from the database, from holding the main thread while it's tokenised. `score`
+settles whatever is left first, so a search never misses a repo.
 
 -}
 
 import Dict exposing (Dict)
+import Filters
 import Repo exposing (Repo)
-import Set
+import Set exposing (Set)
 import Tokens
 
 
 type Index
     = Index
         { entries : Dict Int Entry
-        , postings : Dict String Posting
-        , totals : Fields Float
         , count : Int
 
+        -- The repos not indexed for search yet.
+        , queue : Set Int
+        , postings : Dict String Posting
+
+        -- The field lengths of the indexed repos, and how many there are.
+        , totals : Fields Float
+        , indexed : Int
+
         -- The terms in order, for finding the ones a typed word starts with by bisection
-        -- instead of walking them all. Rebuilt once per batch of changes.
+        -- instead of walking them all. Covers every term whenever the queue is empty; terms
+        -- whose last repo was removed may linger, and are skipped.
         , vocabulary : Vocabulary
         , avatars : Dict String String
+        , facets : Facets
         }
+
+
+{-| How many repos in the library have each language, topic and owner.
+-}
+type alias Facets =
+    { languages : Dict String Int
+    , topics : Dict String Int
+    , owners : Dict String Int
+    }
 
 
 {-| The terms by their position in sorted order. A `Dict` rather than an `Array`: Elm's
@@ -47,17 +74,35 @@ type alias Vocabulary =
     }
 
 
-type alias Entry =
-    { repo : Repo
-    , terms : List String
+type Entry
+    = Queued Repo
+    | Indexed Repo Words
+
+
+{-| What indexing a repo took note of: the terms to take out of the postings when it goes,
+and its field lengths, for normalising.
+-}
+type alias Words =
+    { terms : List String
     , lengths : Fields Float
-    , name : String
     }
 
 
+repoOf : Entry -> Repo
+repoOf entry =
+    case entry of
+        Queued repo ->
+            repo
+
+        Indexed repo _ ->
+            repo
+
+
+{-| The repos a term appears in, with how often it appears in each of their fields.
+-}
 type alias Posting =
     { count : Int
-    , docs : Dict Int Float
+    , docs : Dict Int (Fields Float)
     }
 
 
@@ -107,11 +152,14 @@ empty : Index
 empty =
     Index
         { entries = Dict.empty
+        , count = 0
+        , queue = Set.empty
         , postings = Dict.empty
         , totals = zeroes
-        , count = 0
+        , indexed = 0
         , vocabulary = { terms = Dict.empty, size = 0 }
         , avatars = Dict.empty
+        , facets = { languages = Dict.empty, topics = Dict.empty, owners = Dict.empty }
         }
 
 
@@ -122,69 +170,130 @@ zeroes =
 
 fromList : List Repo -> Index
 fromList repos =
-    let
-        tokenized =
-            List.map (\repo -> ( repo, tokenize repo )) repos
-
-        totals =
-            List.foldl (\( _, fields ) sum -> addFields (lengthsOf fields) sum) zeroes tokenized
-
-        count =
-            List.length repos
-    in
-    List.foldl (\( repo, fields ) index -> insert (averages totals count) repo fields index)
-        (Index { entries = Dict.empty, postings = Dict.empty, totals = totals, count = count, vocabulary = { terms = Dict.empty, size = 0 }, avatars = Dict.empty })
-        tokenized
-        |> withVocabulary
+    upsert repos empty
 
 
+{-| Adds repos, or replaces them, queued for indexing.
+-}
 upsert : List Repo -> Index -> Index
 upsert repos index =
     List.foldl
         (\repo acc ->
             let
-                (Index removed) =
+                (Index data) =
                     removeOne repo.id acc
-
-                fields =
-                    tokenize repo
-
-                lengths =
-                    lengthsOf fields
-
-                totals =
-                    addFields lengths removed.totals
-
-                withRepo =
-                    Index { removed | totals = totals, count = removed.count + 1 }
             in
-            insert (averages totals (removed.count + 1)) repo fields withRepo
+            Index
+                { data
+                    | entries = Dict.insert repo.id (Queued repo) data.entries
+                    , count = data.count + 1
+                    , queue = Set.insert repo.id data.queue
+                    , avatars = Dict.insert repo.owner repo.avatar data.avatars
+                    , facets = countFacets 1 repo data.facets
+                }
         )
         index
         repos
-        |> withVocabulary
 
 
 remove : List Int -> Index -> Index
 remove repoIds index =
     List.foldl removeOne index repoIds
-        |> withVocabulary
 
 
 removeOne : Int -> Index -> Index
 removeOne id (Index data) =
     case Dict.get id data.entries of
-        Just entry ->
+        Just (Indexed repo words) ->
             Index
                 { data
                     | entries = Dict.remove id data.entries
-                    , postings = List.foldl (removePosting id) data.postings entry.terms
-                    , totals = subtractFields entry.lengths data.totals
                     , count = data.count - 1
+                    , postings = List.foldl (removePosting id) data.postings words.terms
+                    , totals = subtractFields words.lengths data.totals
+                    , indexed = data.indexed - 1
+                    , facets = countFacets -1 repo data.facets
+                }
+
+        Just (Queued repo) ->
+            Index
+                { data
+                    | entries = Dict.remove id data.entries
+                    , count = data.count - 1
+                    , queue = Set.remove id data.queue
+                    , facets = countFacets -1 repo data.facets
                 }
 
         Nothing ->
             Index data
+
+
+{-| Counts a repo's language, topics and owner in or, with -1, out.
+-}
+countFacets : Int -> Repo -> Facets -> Facets
+countFacets delta repo counts =
+    let
+        bump value =
+            Dict.update value
+                (\current ->
+                    let
+                        next =
+                            Maybe.withDefault 0 current + delta
+                    in
+                    if next > 0 then
+                        Just next
+
+                    else
+                        Nothing
+                )
+    in
+    { languages = List.foldl bump counts.languages (Filters.valuesOf Filters.Language repo)
+    , topics = List.foldl bump counts.topics (Filters.valuesOf Filters.Topic repo)
+    , owners = List.foldl bump counts.owners (Filters.valuesOf Filters.Owner repo)
+    }
+
+
+{-| Whether some repos still wait to be indexed for search.
+-}
+pending : Index -> Bool
+pending (Index data) =
+    not (Set.isEmpty data.queue)
+
+
+{-| Indexes up to `batch` of the waiting repos.
+-}
+settle : Int -> Index -> Index
+settle batch ((Index data) as index) =
+    if Set.isEmpty data.queue then
+        index
+
+    else
+        let
+            ( _, next ) =
+                Set.foldl
+                    (\id ( taken, acc ) ->
+                        if taken < batch then
+                            ( taken + 1, id :: acc )
+
+                        else
+                            ( taken, acc )
+                    )
+                    ( 0, [] )
+                    data.queue
+
+            (Index done) =
+                List.foldl indexOne (Index { data | queue = List.foldl Set.remove data.queue next }) next
+        in
+        if Set.isEmpty done.queue then
+            withVocabulary (Index done)
+
+        else
+            Index done
+
+
+settleAll : Index -> Index
+settleAll ((Index data) as index) =
+    settle (Set.size data.queue) index
 
 
 withVocabulary : Index -> Index
@@ -210,30 +319,46 @@ removePosting id term =
         )
 
 
-{-| Adds a repo that isn't in the index, counted in the totals already.
+{-| Puts a queued repo's terms in the postings.
 -}
-insert : Fields Float -> Repo -> Fields (List String) -> Index -> Index
-insert average repo fields (Index data) =
+indexOne : Int -> Index -> Index
+indexOne id ((Index data) as index) =
+    case Dict.get id data.entries of
+        Just (Queued repo) ->
+            insert repo index
+
+        _ ->
+            index
+
+
+insert : Repo -> Index -> Index
+insert repo (Index data) =
     let
+        fields =
+            tokenize repo
+
+        lengths =
+            lengthsOf fields
+
         frequencies =
             Dict.empty
-                |> addField weighting.name average.name fields.name
-                |> addField weighting.owner average.owner fields.owner
-                |> addField weighting.topics average.topics fields.topics
-                |> addField weighting.description average.description fields.description
-                |> addField weighting.language average.language fields.language
+                |> countField (\f -> { f | name = f.name + 1 }) fields.name
+                |> countField (\f -> { f | owner = f.owner + 1 }) fields.owner
+                |> countField (\f -> { f | topics = f.topics + 1 }) fields.topics
+                |> countField (\f -> { f | description = f.description + 1 }) fields.description
+                |> countField (\f -> { f | language = f.language + 1 }) fields.language
 
         postings =
             Dict.foldl
-                (\term frequency acc ->
+                (\term counts acc ->
                     Dict.update term
                         (\existing ->
                             case existing of
                                 Just posting ->
-                                    Just { count = posting.count + 1, docs = Dict.insert repo.id frequency posting.docs }
+                                    Just { count = posting.count + 1, docs = Dict.insert repo.id counts posting.docs }
 
                                 Nothing ->
-                                    Just { count = 1, docs = Dict.singleton repo.id frequency }
+                                    Just { count = 1, docs = Dict.singleton repo.id counts }
                         )
                         acc
                 )
@@ -243,31 +368,41 @@ insert average repo fields (Index data) =
     Index
         { data
             | entries =
-                Dict.insert repo.id
-                    { repo = repo
-                    , terms = Dict.keys frequencies
-                    , lengths = lengthsOf fields
-                    , name = String.toLower repo.name
-                    }
-                    data.entries
+                Dict.insert repo.id (Indexed repo { terms = Dict.keys frequencies, lengths = lengths }) data.entries
             , postings = postings
-            , avatars = Dict.insert repo.owner repo.avatar data.avatars
+            , totals = addFields lengths data.totals
+            , indexed = data.indexed + 1
         }
 
 
-addField : Weighting -> Float -> List String -> Dict String Float -> Dict String Float
-addField { weight, b } average tokens frequencies =
-    let
-        norm =
-            1 - b + b * toFloat (List.length tokens) / max 1 average
-
-        increment =
-            weight / norm
-    in
+{-| Counts each token of a field, with `bump` adding one to that field.
+-}
+countField : (Fields Float -> Fields Float) -> List String -> Dict String (Fields Float) -> Dict String (Fields Float)
+countField bump tokens frequencies =
     List.foldl
-        (\token acc -> Dict.update token (\current -> Just (Maybe.withDefault 0 current + increment)) acc)
+        (\token acc -> Dict.update token (\current -> Just (bump (Maybe.withDefault zeroes current))) acc)
         frequencies
         tokens
+
+
+{-| A term's frequency in a repo: its count in each field, normalised by how long that field
+is against the library's average, and weighted by how much the field says.
+-}
+frequency : Fields Float -> Fields Float -> Fields Float -> Float
+frequency average lengths counts =
+    let
+        field { weight, b } mean length count =
+            if count == 0 then
+                0
+
+            else
+                count * weight / (1 - b + b * length / max 1 mean)
+    in
+    field weighting.name average.name lengths.name counts.name
+        + field weighting.owner average.owner lengths.owner counts.owner
+        + field weighting.topics average.topics lengths.topics counts.topics
+        + field weighting.description average.description lengths.description counts.description
+        + field weighting.language average.language lengths.language counts.language
 
 
 tokenize : Repo -> Fields (List String)
@@ -349,12 +484,19 @@ size (Index data) =
 
 get : Int -> Index -> Maybe Repo
 get id (Index data) =
-    Dict.get id data.entries |> Maybe.map .repo
+    Dict.get id data.entries |> Maybe.map repoOf
 
 
 ids : Index -> List Int
 ids (Index data) =
     Dict.keys data.entries
+
+
+{-| How many repos have each language, topic and owner, over the whole library.
+-}
+facets : Index -> Facets
+facets (Index data) =
+    data.facets
 
 
 {-| The avatar of an owner of any starred repo.
@@ -372,7 +514,7 @@ starBounds (Index data) =
         (\_ entry bounds ->
             let
                 stars =
-                    entry.repo.stars
+                    (repoOf entry).stars
             in
             case bounds of
                 Just ( low, high ) ->
@@ -387,7 +529,7 @@ starBounds (Index data) =
 
 toList : Index -> List Repo
 toList (Index data) =
-    Dict.foldr (\_ entry acc -> entry.repo :: acc) [] data.entries
+    Dict.foldr (\_ entry acc -> repoOf entry :: acc) [] data.entries
 
 
 
@@ -398,13 +540,16 @@ toList (Index data) =
 the query has no words, and so doesn't narrow anything.
 -}
 score : String -> Index -> Maybe (Dict Int Float)
-score query (Index data) =
+score query index =
     case unique (Tokens.words query) of
         [] ->
             Nothing
 
         first :: rest ->
             let
+                (Index data) =
+                    settleAll index
+
                 phrase =
                     String.toLower (String.filter Char.isAlphaNum query)
 
@@ -425,8 +570,11 @@ boost phrase entries id relevance =
     case Dict.get id entries of
         Just entry ->
             let
+                repo =
+                    repoOf entry
+
                 name =
-                    String.filter Char.isAlphaNum entry.name
+                    String.filter Char.isAlphaNum (String.toLower repo.name)
 
                 factor =
                     if name == phrase then
@@ -438,21 +586,27 @@ boost phrase entries id relevance =
                     else
                         1
             in
-            factor * relevance + 0.05 * logBase 10 (1 + toFloat entry.repo.stars)
+            factor * relevance + 0.05 * logBase 10 (1 + toFloat repo.stars)
 
         Nothing ->
             relevance
 
 
-scoreWord : { a | postings : Dict String Posting, vocabulary : Vocabulary, count : Int } -> String -> Dict Int Float
+{-| Scores one query word against a settled index, where every repo is indexed.
+-}
+scoreWord : { a | postings : Dict String Posting, vocabulary : Vocabulary, entries : Dict Int Entry, totals : Fields Float, indexed : Int } -> String -> Dict Int Float
 scoreWord data word =
+    let
+        n =
+            toFloat data.indexed
+
+        average =
+            averages data.totals data.indexed
+    in
     expand word data
         |> List.foldl
             (\( factor, posting ) acc ->
                 let
-                    n =
-                        toFloat data.count
-
                     df =
                         toFloat posting.count
 
@@ -460,21 +614,29 @@ scoreWord data word =
                         logBase e (1 + (n - df + 0.5) / (df + 0.5))
                 in
                 Dict.foldl
-                    (\id tf inner ->
-                        let
-                            value =
-                                factor * idf * (tf * (k1 + 1)) / (tf + k1)
-                        in
-                        Dict.update id
-                            (\best ->
-                                case best of
-                                    Just existing ->
-                                        Just (max existing value)
+                    (\id counts inner ->
+                        case Dict.get id data.entries of
+                            Just (Indexed _ words) ->
+                                let
+                                    tf =
+                                        frequency average words.lengths counts
 
-                                    Nothing ->
-                                        Just value
-                            )
-                            inner
+                                    value =
+                                        factor * idf * (tf * (k1 + 1)) / (tf + k1)
+                                in
+                                Dict.update id
+                                    (\best ->
+                                        case best of
+                                            Just existing ->
+                                                Just (max existing value)
+
+                                            Nothing ->
+                                                Just value
+                                    )
+                                    inner
+
+                            _ ->
+                                inner
                     )
                     acc
                     posting.docs

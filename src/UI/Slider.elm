@@ -5,6 +5,7 @@ module UI.Slider exposing
     , onChange
     , min, max, step
     , vertical, disabled
+    , labels, valueText
     , toHtml
     )
 
@@ -59,6 +60,11 @@ A slider takes exactly one of these, before its handler.
 @docs vertical, disabled
 
 
+# Accessibility
+
+@docs labels, valueText
+
+
 # Rendering
 
 @docs toHtml
@@ -86,6 +92,8 @@ type Slider a status msg
         , step : Float
         , orientation : Orientation
         , disabled : Bool
+        , labels : List String
+        , valueText : Maybe (Float -> String)
         }
 
 
@@ -129,6 +137,8 @@ new =
         , step = 1
         , orientation = Horizontal
         , disabled = False
+        , labels = []
+        , valueText = Nothing
         }
 
 
@@ -178,6 +188,8 @@ withValues list toValue (Slider config) =
         , step = config.step
         , orientation = config.orientation
         , disabled = config.disabled
+        , labels = config.labels
+        , valueText = config.valueText
         }
 
 
@@ -233,6 +245,32 @@ vertical (Slider config) =
 disabled : Slider a status msg -> Slider a status msg
 disabled (Slider config) =
     Slider { config | disabled = True }
+
+
+
+-- ACCESSIBILITY
+
+
+{-| The accessible name of each thumb, in order. A slider with more than one thumb needs them,
+since one label can't name both ends of a range:
+
+    Slider.labels [ "Minimum price", "Maximum price" ]
+
+-}
+labels : List String -> Slider a status msg -> Slider a status msg
+labels names (Slider config) =
+    Slider { config | labels = names }
+
+
+{-| What a screen reader says for a value, when the number on the track isn't what it means.
+A thumb at step 3 of a logarithmic scale might read "1k":
+
+    Slider.valueText (\position -> Format.compact (valueAt position))
+
+-}
+valueText : (Float -> String) -> Slider a status msg -> Slider a status msg
+valueText toText (Slider config) =
+    Slider { config | valueText = Just toText }
 
 
 
@@ -374,7 +412,7 @@ thumbInset =
 
 
 viewThumb :
-    { c | values : List Float, onChange : Maybe (List Float -> Maybe msg), min : Float, max : Float, step : Float, orientation : Orientation, disabled : Bool }
+    { c | values : List Float, onChange : Maybe (List Float -> Maybe msg), min : Float, max : Float, step : Float, orientation : Orientation, disabled : Bool, labels : List String, valueText : Maybe (Float -> String) }
     -> Int
     -> Int
     -> ( Float, Float )
@@ -437,19 +475,28 @@ viewThumb config count index ( v, f ) =
             )
         ]
         [ Html.input
-            [ type_ "range"
-            , attribute "data-slot" "slider-thumb"
-            , attribute "min" (String.fromFloat config.min)
-            , attribute "max" (String.fromFloat config.max)
-            , attribute "step" (String.fromFloat config.step)
-            , Html.Attributes.value (String.fromFloat v)
-            , Html.Attributes.disabled config.disabled
-            , Html.Events.on "input" (changeDecoder config index)
-            , class "peer m-0 block size-full cursor-default appearance-none bg-transparent p-0 opacity-0 outline-none disabled:pointer-events-none"
-            , class "[&::-webkit-slider-thumb]:size-7 [&::-webkit-slider-thumb]:appearance-none [&::-moz-range-thumb]:size-7 [&::-moz-range-thumb]:border-0"
-            , class inputClass
-            , class hitArea
-            ]
+            ([ type_ "range"
+             , attribute "data-slot" "slider-thumb"
+             , attribute "min" (String.fromFloat config.min)
+             , attribute "max" (String.fromFloat config.max)
+             , attribute "step" (String.fromFloat config.step)
+             , Html.Attributes.value (String.fromFloat v)
+             , Html.Attributes.disabled config.disabled
+             , Html.Events.on "input" (changeDecoder config index)
+             , class "peer m-0 block size-full cursor-default appearance-none bg-transparent p-0 opacity-0 outline-none disabled:pointer-events-none"
+             , class "[&::-webkit-slider-thumb]:size-7 [&::-webkit-slider-thumb]:appearance-none [&::-moz-range-thumb]:size-7 [&::-moz-range-thumb]:border-0"
+             , class inputClass
+             , class hitArea
+             ]
+                ++ List.map (attribute "aria-label") (List.take 1 (List.drop index config.labels))
+                ++ (case config.valueText of
+                        Just toText ->
+                            [ attribute "aria-valuetext" (toText v) ]
+
+                        Nothing ->
+                            []
+                   )
+            )
             []
         , Html.span
             [ attribute "aria-hidden" "true"
